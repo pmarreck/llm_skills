@@ -212,12 +212,28 @@ verbatim (lightly adapted if needed) as the final section:
 ## After reading this document
 
 - Once you have read this handoff fully and have its context, you
-  may move it to system Trash. Prefer `rm-safe HANDOFF-*.md` if it
-  is installed (cross-platform, preserves restore metadata).
-  Otherwise fall back to the OS Trash directly:
-  `mv HANDOFF-*.md ~/.Trash/` on macOS, or
-  `mv HANDOFF-*.md ~/.local/share/Trash/files/` on Linux. The next
-  `/handoff` will create a fresh one.
+  may move it to system Trash. The portable form (works regardless
+  of whether your shell expands globs) uses `find`:
+
+      find . -maxdepth 1 -name 'HANDOFF-*.md' -exec rm-safe {} +
+
+  `rm-safe` is a cross-platform safe-delete helper that moves to
+  the OS Trash with restore metadata. If it is not installed,
+  substitute the OS Trash directory directly:
+
+      # macOS
+      find . -maxdepth 1 -name 'HANDOFF-*.md' -exec mv {} ~/.Trash/ \;
+      # Linux (FreeDesktop XDG Trash)
+      mkdir -p ~/.local/share/Trash/files
+      find . -maxdepth 1 -name 'HANDOFF-*.md' \
+          -exec mv {} ~/.local/share/Trash/files/ \;
+
+  If your shell does have globbing enabled, the shorthand
+  `rm-safe HANDOFF-*.md` (or the equivalent `mv`) works too. Some
+  shell configurations disable globbing globally for safety; use
+  `find` if you are unsure or if a glob wrapper (e.g. `glob`) is
+  required in your environment. The next `/handoff` will create a
+  fresh one.
 - Next, read any top-level Markdown documents in this directory that
   are not yet in your context (`PROJECT_OVERVIEW.md`, `PLAN.md`,
   `RULES.md`, `AGENTS.md`, `CLAUDE.md`, `CODE_MINIMAP.md`,
