@@ -55,6 +55,7 @@ for the full mechanism.
 |---|---|
 | [`deep-code-review`](deep-code-review/SKILL.md) | Auditing a codebase or major subsystem for quality + missed issues |
 | [`dispatch`](dispatch/SKILL.md) | Dispatching background subagents for substantial parallel work with checkpointing |
+| [`handoff`](handoff/SKILL.md) | Writing a session handoff document so a fresh agent can pick up the work with full purpose + intent |
 | [`i18n`](i18n/SKILL.md) | Any user-facing UI work involving translations, locales, `--lang`, RTL, or bilingual errors |
 | [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
 
