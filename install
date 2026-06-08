@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# install — symlink this llm_skills clone to ~/.claude/skills so Claude Code
+# (and any agent harness that reads skills from $HOME/.claude/skills) picks
+# up the skills in this repo. Idempotent and safe to re-run.
+
+set -uo pipefail
+set -E
+trap 'printf "\ninstall: failure on line %s\n" "$LINENO" >&2; exit 1' ERR
+
+# Resolve the real directory of this script, regardless of where it was
+# invoked from (and even if the caller used a symlink).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+TARGET="$HOME/.claude/skills"
+TS="$(date +%Y%m%d-%H%M%S)"
+BAK="$TARGET.bak.$TS"
+
+# Detect the current state of $TARGET so we can describe an accurate plan.
+#   kind: none | symlink-self | symlink-other | directory | file
+kind="none"
+detail=""
+if [ -L "$TARGET" ]; then
+    detail="$(readlink "$TARGET")"
+    if [ "$detail" = "$SCRIPT_DIR" ]; then
+        kind="symlink-self"
+    else
+        kind="symlink-other"
+    fi
+elif [ -d "$TARGET" ]; then
+    kind="directory"
+elif [ -e "$TARGET" ]; then
+    kind="file"
+fi
+
+# Print the plan.
+printf '\n'
+printf 'llm_skills installer\n'
+printf '====================\n'
+printf 'Source (this repo):  %s\n' "$SCRIPT_DIR"
+printf 'Target symlink:      %s\n' "$TARGET"
+printf '\n'
+printf 'Plan:\n'
+
+case "$kind" in
+    none)
+        printf '  - %s does not exist.\n' "$TARGET"
+        if [ ! -d "$HOME/.claude" ]; then
+            printf '  - Will create parent directory: %s\n' "$HOME/.claude"
+        fi
+        printf '  - Will create symlink: %s -> %s\n' "$TARGET" "$SCRIPT_DIR"
+        ;;
+    symlink-self)
+        printf '  - %s is already a symlink to this repo.\n' "$TARGET"
+        printf '  - Nothing to do.\n\n'
+        printf 'Already installed. Exiting.\n'
+        exit 0
+        ;;
+    symlink-other)
+        printf '  - %s is a symlink pointing to:\n' "$TARGET"
+        printf '        %s\n' "$detail"
+        printf '  - Will rename the existing symlink to: %s\n' "$BAK"
+        printf '  - Will create a new symlink: %s -> %s\n' "$TARGET" "$SCRIPT_DIR"
+        ;;
+    directory)
+        printf '  - %s is a real directory (not a symlink).\n' "$TARGET"
+        printf '  - Will rename it to:       %s\n' "$BAK"
+        printf '    (preserves any locally-authored skills outside this repo)\n'
+        printf '  - Will create a new symlink: %s -> %s\n' "$TARGET" "$SCRIPT_DIR"
+        ;;
+    file)
+        printf '  - %s is an unexpected file (not a directory, not a symlink).\n' "$TARGET"
+        printf '  - Will rename it to:       %s\n' "$BAK"
+        printf '  - Will create a new symlink: %s -> %s\n' "$TARGET" "$SCRIPT_DIR"
+        ;;
+esac
+
+printf '\n'
+printf 'Proceed? [y/N] '
+read -r reply
+case "${reply:-}" in
+    y|Y|yes|YES) ;;
+    *)
+        printf 'Aborted.\n' >&2
+        exit 1
+        ;;
+esac
+
+# Execute.
+if [ ! -d "$HOME/.claude" ]; then
+    mkdir -p "$HOME/.claude"
+    printf 'Created %s\n' "$HOME/.claude"
+fi
+
+if [ -L "$TARGET" ] || [ -e "$TARGET" ]; then
+    mv "$TARGET" "$BAK"
+    printf 'Moved %s -> %s\n' "$TARGET" "$BAK"
+fi
+
+ln -s "$SCRIPT_DIR" "$TARGET"
+printf 'Created symlink: %s -> %s\n' "$TARGET" "$SCRIPT_DIR"
+printf '\nDone. Claude Code (and any agent harness reading %s) will now\n' "$TARGET"
+printf 'pick up skills from this repo.\n'
