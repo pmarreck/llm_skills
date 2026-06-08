@@ -62,6 +62,22 @@ mirroring and ANSI escape handling for these.
 codes via longest-match-with-separator-boundary so `fil` doesn't
 collide with `fi` and `pt_br` parses as one unit.
 
+**Chinese region→script folding (generic `zh`):** the bare macrolanguage code
+`zh` and region-only forms carry no explicit `Hans`/`Hant` script subtag, so the
+parser must fold them deterministically instead of failing to match:
+- `zh`, `zh_CN`, `zh_SG`, `zh_MY` → **Simplified** (`zh_hans`) — the default.
+- `zh_TW`, `zh_HK`, `zh_MO` → **Traditional** (`zh_hant`) — the historically
+  Traditional-script regions.
+- An explicit script subtag always wins over region: `zh_Hant`, `zh_Hant_HK`
+  → Traditional; `zh_Hans` → Simplified. The normal longest-match pass matches
+  these first; the region table is only a fallback when no script subtag exists.
+
+This is the same default-to-Simplified-unless-TW/HK/MO rule CLDR/BCP-47
+likely-subtags encode, reduced to the three Traditional regions so you don't
+have to vendor a full likelihood-subtags database. The pattern generalizes:
+any macrolanguage with script variants (e.g. `sr` Cyrillic/Latin) can use a
+small region→variant fallback table behind the longest-match parser.
+
 **Why this 50 (the selection lens — preserve in PROJECT_OVERVIEW.md):**
 high-computer-penetration languages PLUS deliberately under-served
 ones (Hausa, Amharic, Yoruba, Igbo, Filipino) on a "seed adoption where
@@ -219,7 +235,10 @@ Every project (post-enforce phase) must include these tests:
    English-shadowed errors are emitted.
 5. **Locale-parser sanity** — `parse("fil") == FIL` (not `FI` + `l`);
    `parse("pt_br") == PT_BR`; `parse("zh_hant") == ZH_HANT`; longest
-   match wins.
+   match wins. Chinese region-folding: `parse("zh_CN") == ZH_HANS`,
+   `parse("zh") == ZH_HANS`, `parse("zh_TW") == ZH_HANT`,
+   `parse("zh_HK") == ZH_HANT`; explicit script beats region
+   (`parse("zh_Hant_HK") == ZH_HANT`).
 6. **Env-var precedence** — `--lang fr` beats `LANG=de_DE.UTF-8`; chain
    tested top to bottom.
 
