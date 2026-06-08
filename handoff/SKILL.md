@@ -7,9 +7,21 @@ argument-hint: What will the next session be used for?
 # handoff — write a session handoff document for the next agent
 
 A handoff document is the bridge between sessions. A new agent
-arriving cold should be able to read one file and immediately
-understand why the project exists, what just happened, what's still
-in motion, and what to do next. This skill writes that file.
+(human or LLM) arriving cold should be able to read one file and
+immediately understand why the project exists, what just happened,
+what's still in motion, and what to do next — *and then proceed
+directly into the work without further investigation.*
+
+**Completeness over brevity.** The document should be long enough to
+cover everything the next agent needs to act, including the purpose,
+the recent decisions and why they were made, the current state, the
+open questions, and any environmental gotchas the current session
+discovered. Length is fine; missing context is not. Where another
+artifact already holds the truth (a `PLAN.md`, a SPEC, a commit
+message, a GitHub issue), reference it by path/line/URL and include
+a one-to-three-sentence summary so the next agent can choose whether
+to read the source or rely on your summary. Reference rather than
+duplicate, but do not omit.
 
 ## When to invoke
 
@@ -89,16 +101,30 @@ After PURPOSE & INTENT, three required sections:
   should take. Order them. If the user provided an argument, anchor
   this list around it.
 
-### Step 3 — reference, don't duplicate
+### Step 3 — be complete; reference rather than duplicate
 
-The handoff is an *index*, not a textbook. Wherever the truth lives
-in another artifact (a `PLAN.md`, a commit message, a GitHub issue, a
-SPEC, a code file), reference it by path or URL. Quote at most a
-single line for context.
+The document must be complete enough that a fresh agent can proceed
+directly into the next unit of work after reading it. That means
+capturing everything they need to act: purpose, current state,
+recent decisions and the reasoning behind them, what was tried and
+discarded, what is loaded into the current session's context, open
+questions, environmental gotchas the current session ran into.
+Length is not a goal to minimize.
 
-Anti-pattern: copying a 50-line spec from another doc into the
-handoff. Pattern: "see `docs/SPEC.md` §3 for the proposed safety
-model; we are partway through implementing rule (b)."
+"Complete" does NOT mean "paste everything wholesale." Where the
+truth lives in another artifact (a `PLAN.md`, commit message,
+GitHub issue, SPEC, code file), reference it by path / line /
+URL, and accompany the reference with a one-to-three-sentence
+summary so the next agent can decide whether to read the source
+or rely on your summary. The next agent should not have to chase.
+
+Anti-pattern (bad): copying a 50-line spec from another doc into
+the handoff. Anti-pattern (also bad): writing only "see
+`docs/SPEC.md` §3" with no summary, forcing a chase. Pattern
+(good): "see `docs/SPEC.md` §3 (safety model) — the rule cascade
+is detect → quiesce → backup → modify → verify; we are partway
+through implementing the backup step (rule b), with the verify step
+already covered by `tests/integration/verify_after_fix_test.zig`."
 
 ### Step 4 — redact sensitive information
 
@@ -136,20 +162,43 @@ fi
 ```
 
 Move older HANDOFF docs to system Trash (you read them in step 0;
-they've served their purpose):
+they've served their purpose). This skill is OS-portable; the Trash
+location differs between macOS and Linux.
+
+**Preferred:** use `rm-safe` if it's on the PATH. `rm-safe` is a
+cross-platform safe-delete helper that moves the target to the
+system Trash for the current OS (macOS `~/.Trash/`, Linux
+FreeDesktop XDG Trash at `~/.local/share/Trash/files/` with
+restore metadata in `~/.local/share/Trash/info/`). Behaves like
+`rm`, but is undoable.
 
 ```bash
-# macOS
-find . -maxdepth 1 -type f -name "HANDOFF-*.md" ! -name "$out" \
-    -exec mv {} "$HOME/.Trash/" \;
-
-# Linux (fallback if ~/.Trash doesn't exist)
-# find . -maxdepth 1 -type f -name "HANDOFF-*.md" ! -name "$out" \
-#     -exec mv {} "$HOME/.local/share/Trash/files/" \;
+if command -v rm-safe >/dev/null 2>&1; then
+    find . -maxdepth 1 -type f -name "HANDOFF-*.md" ! -name "$out" \
+        -exec rm-safe {} +
+else
+    # Fallback: detect OS and mv to the OS's Trash directory.
+    case "$(uname -s)" in
+        Darwin)
+            trash="$HOME/.Trash"
+            ;;
+        Linux)
+            trash="$HOME/.local/share/Trash/files"
+            mkdir -p "$trash"
+            ;;
+        *)
+            # Unknown Unix; default to a ~/.Trash convention.
+            trash="$HOME/.Trash"
+            mkdir -p "$trash"
+            ;;
+    esac
+    find . -maxdepth 1 -type f -name "HANDOFF-*.md" ! -name "$out" \
+        -exec mv {} "$trash/" \;
+fi
 ```
 
-Never `rm` — trash only. The user may want to recover an older
-handoff.
+Never `rm` outright — trash only. The user may want to recover an
+older handoff.
 
 ### Step 6 — end the document with the "after-read" coda
 
@@ -163,15 +212,19 @@ verbatim (lightly adapted if needed) as the final section:
 ## After reading this document
 
 - Once you have read this handoff fully and have its context, you
-  may move it to system Trash (`mv HANDOFF-*.md ~/.Trash/`). The
-  next `/handoff` will create a fresh one.
+  may move it to system Trash. Prefer `rm-safe HANDOFF-*.md` if it
+  is installed (cross-platform, preserves restore metadata).
+  Otherwise fall back to the OS Trash directly:
+  `mv HANDOFF-*.md ~/.Trash/` on macOS, or
+  `mv HANDOFF-*.md ~/.local/share/Trash/files/` on Linux. The next
+  `/handoff` will create a fresh one.
 - Next, read any top-level Markdown documents in this directory that
   are not yet in your context (`PROJECT_OVERVIEW.md`, `PLAN.md`,
   `RULES.md`, `AGENTS.md`, `CLAUDE.md`, `CODE_MINIMAP.md`,
   `MISTAKES.md`, `DESIRES.md`, `LEARNINGS.md`, and anything else at
   the project root). These almost always contain important
-  work-related directives that the handoff intentionally does not
-  duplicate.
+  work-related directives that this handoff references rather than
+  duplicates.
 ```
 
 ## Document skeleton
@@ -220,8 +273,16 @@ The final document should follow this shape:
 
 - **Inventing PURPOSE/INTENT** when unsure. Ask the user. A wrong
   intent statement steers the next agent at every decision point.
-- **Duplicating content** that lives in `PLAN.md`, commit messages,
-  or specs. Reference them.
+- **Optimizing for brevity.** The doc should be complete enough that
+  the next agent can act without research. If you find yourself
+  omitting context because "the doc is getting long," you are
+  optimizing for the wrong thing. Length is fine; gaps are not.
+- **Reference without summary.** Pointing the next agent at
+  `docs/SPEC.md` with no inline summary forces a chase. Every
+  reference should include enough surrounding context that the
+  reader can decide whether to follow it.
+- **Duplicating content wholesale** that lives in `PLAN.md`, commit
+  messages, or specs. Summarize and reference; do not paste.
 - **Burying the PURPOSE & INTENT section** below summary content. It
   is always first.
 - **Leaving secrets in the document.** Redact at write-time, not
