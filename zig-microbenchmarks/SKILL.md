@@ -34,7 +34,92 @@ Core principle: If a function is hot enough to optimize, it's hot enough to benc
 4. **Warm up before measuring** -- first iterations may be cold-cache outliers.
 </important>
 
-## Tier 1: Microbenchmarks (in the test suite)
+## Tier 0: The scaling-ratio gate (PRIMARY — catches complexity regressions)
+
+This is the *hard* gate, and it should exist for every hot path as soon as it hits
+MVP. A single-point time microbench (Tier 1 below) measures *magnitude* and is noisy
+and machine-dependent; an accidental `O(m×n)` loop with a small constant sails right
+through it at one input size. The scaling gate measures **growth shape**, which is the
+thing that actually broke — and because it compares a function to *itself* at growing
+N, the **ratio cancels machine speed: it needs no per-machine baseline and holds
+identically in CI on any box.** It's an MFIC metamorphic test (oracle-free): you assert
+a *relationship* f(2N)≈k·f(N), not a logged number.
+
+### Step 1 — declare intended complexity on each hot function
+
+```zig
+// complexity: O(n)   -- candidate scan: one pass over the text
+fn referenceScan(...) ... { ... }
+```
+
+The annotation is the producer's falsifiable claim; the gate is its independent check.
+An agent who writes a quadratic loop under `// complexity: O(n)` fails the build.
+
+### Step 2 — the harness (`tests/scaling.zig`, ReleaseFast only)
+
+```zig
+const std = @import("std");
+
+/// CPU/user time, not wall-clock: excludes time the process was scheduled out, so it
+/// is far steadier on a loaded machine (a fleet, a laptop). Single-threaded kernels
+/// only; use wall-clock for parallel/I-O work. POSIX shown; Windows: GetProcessTimes.
+fn cpuTimeNs() u64 {
+    var ts: std.posix.timespec = undefined;
+    std.posix.clock_gettime(.PROCESS_CPUTIME_ID, &ts) catch return 0;
+    return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+}
+
+/// Median per-doubling growth ratio of `work` at N, 2N, 4N, 8N.
+/// min-of-K per size suppresses noise; median-of-ratios is robust to one bad point.
+fn growthRatio(work: *const fn (usize) void, base: usize) f64 {
+    const sizes = [_]usize{ base, base * 2, base * 4, base * 8 };
+    var t: [4]u64 = undefined;
+    for (sizes, 0..) |n, i| {
+        var best: u64 = std.math.maxInt(u64);
+        var k: usize = 0;
+        while (k < 5) : (k += 1) {
+            const s = cpuTimeNs();
+            work(n);
+            const d = cpuTimeNs() - s;
+            if (d < best) best = d;
+        }
+        t[i] = best;
+    }
+    var r = [_]f64{
+        @as(f64, @floatFromInt(t[1])) / @as(f64, @floatFromInt(t[0])),
+        @as(f64, @floatFromInt(t[2])) / @as(f64, @floatFromInt(t[1])),
+        @as(f64, @floatFromInt(t[3])) / @as(f64, @floatFromInt(t[2])),
+    };
+    std.mem.sort(f64, &r, {}, std.sort.asc(f64));
+    return r[1]; // median
+}
+
+test "scaling: referenceScan stays linear" {
+    // Pick `base` large enough that the linear term dominates constant factors.
+    const ratio = growthRatio(benchReferenceScan, 8192);
+    // linear ≈ 2.0, n·log n ≈ 2.2, quadratic ≈ 4.0. Gate at 2.8: catches the
+    // quadratic class with headroom for noise + log factors.
+    if (ratio >= 2.8) {
+        std.debug.print("referenceScan growth {d:.2}× per doubling — super-linear!\n", .{ratio});
+        return error.ComplexityRegression;
+    }
+}
+```
+
+### Rules
+
+- **Threshold 2.8×** for an `O(n)`/`O(n log n)` declaration. For an intentionally
+  `O(n²)` kernel, gate at ~5× (still catches a slip to cubic). Match the gate to the
+  *declared* complexity, not a universal constant.
+- **Verify the gate bites:** confirm it FAILS on the pre-fix (quadratic) code and
+  PASSES fixed — that's the TDD reproduce-then-guard loop; a gate never seen red is
+  vacuous (MFIC: the F).
+- **Honest residuals:** if a rare/secondary path is still super-linear but you're not
+  fixing it now, make the gate **report-only** for that phase and track it — do NOT
+  let it gate green falsely (same discipline as a fence ledger).
+- **Wire it in:** `./bm` runs it locally; add a flake `checks.scaling` so Garnix runs
+  it in-sandbox (the ratio is machine-independent, so it passes there with no baseline).
+
 
 Microbenchmarks live alongside unit tests in `src/lib.zig` (or wherever tests live). They are fast (target <500ms each), run on every `zig build test`, and **fail** if performance drifts outside the window.
 
@@ -159,6 +244,13 @@ test "microbench: crc32_8k" { ... }
 </example>
 
 ### Window: +/-15%
+
+This Tier-1 single-point window is the **secondary, constant-factor gate** — it catches
+"this got slower at a fixed size" (a cache-hostile access pattern, an extra allocation)
+that the Tier-0 scaling gate, which only watches growth *shape*, can miss. Run it on the
+same **CPU/user time** basis as Tier 0 (steadier than wall-clock). Tolerance is
+metric-dependent: ~10% on deterministic op/alloc counts, the ~15–25% here on noisy time
+(or use min-of-N). Both directions matter — a surprise speedup may mean a skipped path.
 
 | Change | Action |
 |---|---|
