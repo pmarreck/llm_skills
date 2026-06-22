@@ -9,6 +9,8 @@ description: Use when shipping work - commit/push and watch Garnix CI, set up CI
 
 Commit (if needed), push, and watch Garnix CI until green. On failure, investigate and fix automatically.
 
+> **SCM is `jj`, never raw `git`** (repos are jj-colocated; a global hook blocks `git`). The one thing that trips up every agent: a jj **bookmark does not advance on commit** — you must `jj bookmark set yolo -r @-` *before* `jj git push`, or you push nothing while believing you shipped. See Step 2, and `~/.claude/skills/jj_cheatsheet.md` for the full model.
+
 <important>
 This is the default completion step for any unit of work. The user considers push+CI the natural end of every task, not an optional extra.
 </important>
@@ -30,43 +32,66 @@ This is the default completion step for any unit of work. The user considers pus
 ```dot
 digraph ship {
   "Work complete" -> "Uncommitted changes?";
-  "Uncommitted changes?" -> "Stage + commit" [label="yes"];
+  "Uncommitted changes?" -> "jj commit" [label="yes"];
   "Uncommitted changes?" -> "Unpushed commits?" [label="no"];
-  "Stage + commit" -> "Push";
-  "Unpushed commits?" -> "Push" [label="yes"];
+  "jj commit" -> "Set yolo + push";
+  "Unpushed commits?" -> "Set yolo + push" [label="yes"];
   "Unpushed commits?" -> "Already pushed, check CI" [label="no"];
-  "Push" -> "Get run ID";
+  "Set yolo + push" -> "Get run ID";
   "Already pushed, check CI" -> "Get run ID";
   "Get run ID" -> "Watch CI in background";
   "Watch CI in background" -> "CI passed?" [label="wait"];
   "CI passed?" -> "Report green" [label="yes"];
   "CI passed?" -> "Investigate failure" [label="no"];
-  "Investigate failure" -> "Fix + commit" -> "Push" [label="retry"];
+  "Investigate failure" -> "Fix + commit" -> "Set yolo + push" [label="retry"];
 }
 ```
 
 ### Step 1: Commit (if needed)
 
-Check `git status`. If there are staged or unstaged changes:
+jj has **no staging area** — your working copy *is* the `@` commit, auto-snapshotted on every command. Check `jj status`. If there are uncommitted changes:
 
 ```bash
-git add <relevant files>   # Be specific, not git add -A
-git commit -m "<message>"
+jj commit -m "<message>"                 # finalizes ALL working-copy changes, opens a fresh empty @
+# To land only specific files (the "be specific" equivalent of `git add <files>`):
+jj commit -m "<message>" <path> <path>   # peels just those paths into the commit; the rest stays in @
 ```
 
 Follow the repo's commit message conventions. Keep messages concise, focused on "why."
 
 <important>
-Do NOT commit: `.env`, credentials, large binaries, or anything in `.gitignore`.
+Use `jj commit -m` (finalizes the change), NOT `jj describe -m` between push cycles — `describe` only *renames* the current change, so successive describe/push cycles sideways-overwrite ONE commit on origin under different messages while accumulating diff. Reserve `describe` for renaming an in-progress change between micro-edits.
+Do NOT commit `.env`, credentials, large binaries, or anything gitignored — and set `.gitignore` BEFORE the first snapshot (jj sweeps every untracked file into `@`).
 </important>
 
-### Step 2: Push
+### Step 2: Advance the bookmark, push, and VERIFY
+
+<important>
+**This is the #1 silent failure in jj — get it wrong and you ship NOTHING while believing you shipped.** A jj **bookmark does NOT move when you `jj commit`** (unlike a git branch, which auto-advances). After `jj commit` your work sits at `@-`, but `yolo` still points at the OLD commit — so `jj git push` sees no changed bookmark, pushes nothing, and prints a benign-looking message. You *think* you pushed. You did not. Always: **advance the bookmark → push → verify the remote moved.**
+</important>
 
 ```bash
-git push origin HEAD
+# 1. Advance yolo onto the commit you just made (@- after `jj commit`; no flag needed going forward).
+#    (If you used `jj describe` instead of `jj commit`, the work is still at @, so use `-r @`.)
+jj bookmark set yolo -r @-
+
+# 2. Push. jj pushes tracked bookmarks via its own configured remote.
+jj git push          # explicit form: jj git push -b yolo
 ```
 
-The branch is almost always `yolo`. Use `HEAD` to push whatever branch you're on.
+The branch is almost always `yolo`.
+
+**Then VERIFY — do not trust "the command ran":**
+
+- Read the `jj git push` output. A real push reports movement: `Move forward bookmark yolo from <X> to <Y>` or `Add bookmark yolo to <Y>`. If it says **`Nothing changed`** or **`No bookmarks found to push`**, you pushed NOTHING — the bookmark wasn't advanced. Go back to step 1.
+- Independent check (the MFIC control on the push) — the remote-tracking bookmark must now hold your commit:
+
+```bash
+jj log -n 2 --no-graph -T 'commit_id.shortest() ++ "  " ++ bookmarks ++ "  " ++ description.first_line() ++ "\n"'
+# yolo AND yolo@origin must both point at your new commit. If yolo@origin is behind, the push did NOT land.
+```
+
+(For git-based deploys that read a *local* branch — `wrangler pages deploy`, etc. — also ensure local git HEAD is on the branch, not detached; see the SCM section of the brief / the `jj-named-branch-for-git-deploys` memory.)
 
 ### Step 3: Get the CI Run
 
@@ -112,7 +137,7 @@ Run this as a background task. Report the result when it completes.
 - **Nix hash mismatch** -- Zig deps changed. See `fix-zig-deps-hash` skill.
 - **Test timeout** -- Tests hanging. Check for infinite loops or missing test termination.
 - **macOS build failure** -- Missing `unset NIX_CFLAGS_COMPILE NIX_LDFLAGS` in flake.nix.
-- **Missing file in Nix sandbox** -- File not tracked by git (Nix builds from git-tracked files only).
+- **Missing file in Nix sandbox** -- File not committed. Nix builds only from committed files (jj auto-snapshots + exports to git every command, so an *uncommitted* working-copy edit or a *gitignored* path is absent from the build). `jj status` — if it's still in `@` (uncommitted) or untracked, that's why.
 
 ---
 
@@ -129,18 +154,23 @@ After CI is green, publish a tagged release so downstream users see a human-read
 
 - No version-number decisions ever — date + hash is unambiguous.
 - Multiple releases same day are unique by hash.
-- `git rev-parse --short HEAD` gives the short hash.
+- `jj log -r @- --no-graph -T 'commit_id.shortest(7)'` gives the short hash of the just-committed work.
 
 ### Commands
 
 <template>
 ```bash
-TAG="$(date +%Y%m%d).$(git rev-parse --short HEAD)"
-PREV_TAG="$(git describe --tags --abbrev=0 2>/dev/null)"
+# Release the COMMITTED work (@-) that you already pushed onto yolo in Step 2.
+SHA7="$(jj log -r @- --no-graph -T 'commit_id.shortest(7)')"
+TAG="$(date +%Y%m%d).${SHA7}"
+# Previous release tag — via gh (jj has no `git describe --tags`):
+PREV_TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null)"
 
-# For a normal release — auto-bulleted commit subjects since last tag:
-git log "${PREV_TAG}..HEAD" --format='- %s' > /tmp/release-body.md
-gh release create "$TAG" --target "$(git branch --show-current)" \
+# Normal release — auto-bulleted commit subjects since the last tag (jj resolves git tags in revsets).
+# No prior tag (first release): RANGE collapses to just @- — hand-curate /tmp/release-body.md instead.
+RANGE="${PREV_TAG:+${PREV_TAG}..}@-"
+jj log -r "$RANGE" --no-graph -T 'description.first_line() ++ "\n"' | sed 's/^/- /' > /tmp/release-body.md
+gh release create "$TAG" --target yolo \
   --title "$TAG" --notes-file /tmp/release-body.md
 
 # For a major release with many commits — hand-curate /tmp/release-body.md
@@ -149,7 +179,7 @@ gh release create "$TAG" --target "$(git branch --show-current)" \
 </template>
 
 <important>
-`gh release create --generate-notes` (GitHub's auto-generator) only produces useful output when the repo uses PRs. For direct-to-`yolo` workflows, it emits just a compare link. Use `--notes-file` with `git log` output instead.
+`gh release create --generate-notes` (GitHub's auto-generator) only produces useful output when the repo uses PRs. For direct-to-`yolo` workflows, it emits just a compare link. Use `--notes-file` with `jj log` output instead.
 </important>
 
 ### After publishing

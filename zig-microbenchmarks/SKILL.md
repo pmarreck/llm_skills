@@ -19,11 +19,12 @@ Core principle: If a function is hot enough to optimize, it's hot enough to benc
 </important>
 
 <when_to_use>
+
 - Adding or modifying a hot-path function
 - Setting up benchmark infrastructure for a new Zig project
 - Performance regression detected via end-to-end testing and you need to isolate which function regressed
 - User says "benchmark", "perf", "regression", "throughput", or "ns/op"
-</when_to_use>
+  </when_to_use>
 
 ## Key Rules
 
@@ -36,14 +37,14 @@ Core principle: If a function is hot enough to optimize, it's hot enough to benc
 
 ## Tier 0: The scaling-ratio gate (PRIMARY — catches complexity regressions)
 
-This is the *hard* gate, and it should exist for every hot path as soon as it hits
-MVP. A single-point time microbench (Tier 1 below) measures *magnitude* and is noisy
+This is the _hard_ gate, and it should exist for every hot path as soon as it hits
+MVP. A single-point time microbench (Tier 1 below) measures _magnitude_ and is noisy
 and machine-dependent; an accidental `O(m×n)` loop with a small constant sails right
 through it at one input size. The scaling gate measures **growth shape**, which is the
-thing that actually broke — and because it compares a function to *itself* at growing
+thing that actually broke — and because it compares a function to _itself_ at growing
 N, the **ratio cancels machine speed: it needs no per-machine baseline and holds
 identically in CI on any box.** It's an MFIC metamorphic test (oracle-free): you assert
-a *relationship* f(2N)≈k·f(N), not a logged number.
+a _relationship_ f(2N)≈k·f(N), not a logged number.
 
 ### Step 1 — declare intended complexity on each hot function
 
@@ -110,7 +111,7 @@ test "scaling: referenceScan stays linear" {
 
 - **Threshold 2.8×** for an `O(n)`/`O(n log n)` declaration. For an intentionally
   `O(n²)` kernel, gate at ~5× (still catches a slip to cubic). Match the gate to the
-  *declared* complexity, not a universal constant.
+  _declared_ complexity, not a universal constant.
 - **Verify the gate bites:** confirm it FAILS on the pre-fix (quadratic) code and
   PASSES fixed — that's the TDD reproduce-then-guard loop; a gate never seen red is
   vacuous (MFIC: the F).
@@ -119,7 +120,6 @@ test "scaling: referenceScan stays linear" {
   let it gate green falsely (same discipline as a fence ledger).
 - **Wire it in:** `./bm` runs it locally; add a flake `checks.scaling` so Garnix runs
   it in-sandbox (the ratio is machine-independent, so it passes there with no baseline).
-
 
 Microbenchmarks live alongside unit tests in `src/lib.zig` (or wherever tests live). They are fast (target <500ms each), run on every `zig build test`, and **fail** if performance drifts outside the window.
 
@@ -134,8 +134,8 @@ Zig's test runner defaults to Debug optimization, which makes timing meaningless
 const builtin = @import("builtin");
 
 test "microbench: hot_function throughput" {
-    // Skip in Debug -- timings are meaningless
-    if (builtin.mode == .Debug) return;
+// Skip in Debug -- timings are meaningless
+if (builtin.mode == .Debug) return;
 
     const input = generateTestInput(4096);
     const log_path = "bench/micro_results.jsonl";
@@ -184,8 +184,10 @@ test "microbench: hot_function throughput" {
             );
         }
     }
+
 }
-```
+
+````
 </template>
 
 To actually run microbenchmarks, use `zig build test -Doptimize=ReleaseFast`. In the build.zig test step, consider adding an option:
@@ -205,7 +207,7 @@ const unit_tests = b.addTest(.{
         .optimize = test_optimize,
     }),
 });
-```
+````
 
 Then: `zig build test -Dtest-optimize=ReleaseFast` runs microbenchmarks.
 Plain `zig build test` skips them (Debug mode, guard returns early).
@@ -247,16 +249,16 @@ test "microbench: crc32_8k" { ... }
 
 This Tier-1 single-point window is the **secondary, constant-factor gate** — it catches
 "this got slower at a fixed size" (a cache-hostile access pattern, an extra allocation)
-that the Tier-0 scaling gate, which only watches growth *shape*, can miss. Run it on the
+that the Tier-0 scaling gate, which only watches growth _shape_, can miss. Run it on the
 same **CPU/user time** basis as Tier 0 (steadier than wall-clock). Tolerance is
 metric-dependent: ~10% on deterministic op/alloc counts, the ~15–25% here on noisy time
 (or use min-of-N). Both directions matter — a surprise speedup may mean a skipped path.
 
-| Change | Action |
-|---|---|
+| Change        | Action                                                                         |
+| ------------- | ------------------------------------------------------------------------------ |
 | > +15% slower | **FAIL** -- `return error.PerformanceRegression`. Investigate before shipping. |
-| > -15% faster | **FLAG** -- print improvement notice. Verify it's real, not noise. |
-| Within +/-15% | Normal variance. Log and continue. |
+| > -15% faster | **FLAG** -- print improvement notice. Verify it's real, not noise.             |
+| Within +/-15% | Normal variance. Log and continue.                                             |
 
 <remember>
 Rerunning is implicit acceptance -- the new result becomes part of the rolling baseline.
@@ -278,12 +280,13 @@ const bench_mod = b.createModule(.{
 bench_mod.addImport("project_name", core_mod);
 
 const bench_exe = b.addExecutable(.{
-    .name = "bench",
-    .root_module = bench_mod,
+.name = "bench",
+.root_module = bench_mod,
 });
 const run_bench = b.addRunArtifact(bench_exe);
 if (b.args) |args| run_bench.addArgs(args);
 b.step("bench", "Run full benchmark suite").dependOn(&run_bench.step);
+
 ```
 </template>
 
@@ -292,11 +295,13 @@ Usage: `zig build bench` or `nix develop -c zig build bench`
 ### Directory structure
 
 ```
+
 bench/
-  bench.zig              # Full benchmark suite binary
-  bench_results.jsonl    # Suite history (git-tracked)
-  micro_results.jsonl    # Microbenchmark history (git-tracked)
-```
+bench.zig # Full benchmark suite binary
+bench_results.jsonl # Suite history (git-tracked)
+micro_results.jsonl # Microbenchmark history (git-tracked)
+
+````
 
 ### Suite harness pattern
 
@@ -352,7 +357,8 @@ pub fn main() !void {
     // See Tier 1 for JSONL logging and baseline comparison patterns.
     // Suite uses same thresholds but prints warnings rather than failing.
 }
-```
+````
+
 </template>
 
 ## JSONL Format and History
@@ -377,44 +383,45 @@ const MicroBenchResult = struct {
 };
 
 fn appendJsonl(path: []const u8, result: MicroBenchResult) !void {
-    const file = std.fs.cwd().openFile(path, .{ .mode = .read_write }) catch |err| switch (err) {
-        error.FileNotFound => try std.fs.cwd().createFile(path, .{}),
-        else => return err,
-    };
-    defer file.close();
-    try file.seekFromEnd(0);
-    try std.json.stringify(result, .{}, file.writer());
-    try file.writer().writeByte('\n');
+const file = std.fs.cwd().openFile(path, .{ .mode = .read_write }) catch |err| switch (err) {
+error.FileNotFound => try std.fs.cwd().createFile(path, .{}),
+else => return err,
+};
+defer file.close();
+try file.seekFromEnd(0);
+try std.json.stringify(result, .{}, file.writer());
+try file.writer().writeByte('\n');
 }
 
 fn loadBaseline(
-    path: []const u8,
-    name: []const u8,
-    allocator: std.mem.Allocator,
+path: []const u8,
+name: []const u8,
+allocator: std.mem.Allocator,
 ) !?u64 {
-    const file = std.fs.cwd().openFile(path, .{}) catch return null;
-    defer file.close();
-    var last_values: [5]u64 = undefined;
-    var count: usize = 0;
-    var buf: [4096]u8 = undefined;
-    const reader = file.reader();
-    while (reader.readUntilDelimiterOrEof(&buf, '\n') catch null) |line| {
-        const parsed = std.json.parseFromSlice(
-            MicroBenchResult, allocator, line,
-            .{ .ignore_unknown_fields = true },
-        ) catch continue;
-        defer parsed.deinit();
-        if (std.mem.eql(u8, parsed.value.name, name)) {
-            last_values[count % 5] = parsed.value.ns_per_op;
-            count += 1;
-        }
-    }
-    if (count == 0) return null;
-    const n = @min(count, 5);
-    var slice = last_values[0..n];
-    std.mem.sort(u64, slice, {}, std.sort.asc(u64));
-    return slice[n / 2];
+const file = std.fs.cwd().openFile(path, .{}) catch return null;
+defer file.close();
+var last_values: [5]u64 = undefined;
+var count: usize = 0;
+var buf: [4096]u8 = undefined;
+const reader = file.reader();
+while (reader.readUntilDelimiterOrEof(&buf, '\n') catch null) |line| {
+const parsed = std.json.parseFromSlice(
+MicroBenchResult, allocator, line,
+.{ .ignore_unknown_fields = true },
+) catch continue;
+defer parsed.deinit();
+if (std.mem.eql(u8, parsed.value.name, name)) {
+last_values[count % 5] = parsed.value.ns_per_op;
+count += 1;
 }
+}
+if (count == 0) return null;
+const n = @min(count, 5);
+var slice = last_values[0..n];
+std.mem.sort(u64, slice, {}, std.sort.asc(u64));
+return slice[n / 2];
+}
+
 ```
 </template>
 
@@ -440,3 +447,4 @@ Target the **hot path** -- functions called once per file or once per block in a
 - **Not tracking history** -- a benchmark without history is just a number. Log to JSONL, commit it.
 - **Running microbenchmarks in CI** -- CI hardware varies. Microbenchmarks should run locally. CI can verify they compile.
 </important>
+```
