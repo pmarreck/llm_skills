@@ -32,15 +32,15 @@ dirtree                          # project file layout and file descriptions
 codescan status                  # is index current and indexer running?
 ```
 
-Read `CODE_MINIMAP.md` if it exists, otherwise the notes added by `dirtree` on the project dir files. Read `PLAN.md` to understand what's been done and what's in progress. Identify the primary language(s).
+Read the notes added by `dirtree` on the project dir files. Read `PLAN.md` to understand what's been done and what's in progress. Identify the primary language(s).
 
-### Step 2: Dispatch 11 Parallel Subagents
+### Step 2: Dispatch 13 Parallel Subagents
 
 Launch one subagent per review dimension. Each subagent should:
 
 - Use `codescan search`, `codescan symbols`, `dirtree`, and file reads
 - Report findings with **severity** (CRITICAL 🔥, WARNING ‼️ or ADVISORY ⚠️) and **file:line** references
-- Be language-aware (Zig, C, Nix, or whatever the project uses)
+- Be language-aware (Zig, C, Elixir, Nix, or whatever the project uses)
 
 <important>
 Give each subagent the project path, the primary language, and a clear scope. Tell them to write their findings to a temp file. Collect and merge results after all complete.
@@ -52,7 +52,7 @@ Merge all subagent findings into `CODE_REVIEW.md` with sections per dimension, s
 
 ---
 
-## The 11 Review Dimensions
+## The 13 Review Dimensions
 
 ### 1. Inconsistent, Incomplete, or Undefined Functionality
 
