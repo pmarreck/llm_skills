@@ -7,7 +7,7 @@ description: Use when auditing a codebase or major subsystem for quality and mis
 
 ## Overview
 
-A comprehensive codebase-wide review across 11 dimensions, executed via parallel subagents. This is not a diff/PR review -- it's a full audit of the current state of the code.
+A comprehensive codebase-wide review across 13 dimensions, executed via parallel subagents. This is not a diff/PR review -- it's a full audit of the current state of the code.
 
 <important>
 Output goes to a file (`CODE_REVIEW.md` in the project root), not inline.
