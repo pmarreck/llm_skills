@@ -91,7 +91,25 @@ jj log -n 2 --no-graph -T 'commit_id.shortest() ++ "  " ++ bookmarks ++ "  " ++ 
 # yolo AND yolo@origin must both point at your new commit. If yolo@origin is behind, the push did NOT land.
 ```
 
-(For git-based deploys that read a *local* branch — `wrangler pages deploy`, etc. — also ensure local git HEAD is on the branch, not detached; see the SCM section of the brief / the `jj-named-branch-for-git-deploys` memory.)
+### Step 2b: Realign git HEAD onto the branch (before any local-branch deploy)
+
+jj keeps the working copy `@` as an empty child of `yolo`, so git's HEAD sits **detached** at `yolo`'s commit. It's at the *right* commit, but git-based deploys that auto-detect the current branch (`wrangler pages deploy`, Vercel, Netlify) read `git rev-parse --abbrev-ref HEAD` — which returns `HEAD` when detached and silently publishes to a **Preview** alias serving OLD work (Peter's lived bug). Re-attach HEAD onto the branch as the LAST git-touching step of the ship cycle:
+
+```bash
+jj git export                          # force jj bookmarks -> git refs (usually already synced)
+git symbolic-ref HEAD refs/heads/yolo  # re-attach the detached HEAD onto yolo  (NO trailing redirect)
+```
+
+- `git symbolic-ref HEAD refs/heads/<branch>` is the **one** raw-git command the block-git hook allows. It's safe because HEAD is already AT the branch's commit (jj sets it to `first_parent(@)`), so this only flips HEAD from a raw commit id to a symbolic ref — **no history, no files, no ref-target change**. `git status` now reads "On branch yolo" and branch-autodetecting deploys see the tip.
+- **Run it CLEAN** — the exception is an exact match, so a trailing `2>&1`/`2>/dev/null` makes the hook block it. It prints nothing on success.
+- Verify (via a file read + jj, since raw `git` is otherwise blocked):
+
+```bash
+cat .git/HEAD   # -> "ref: refs/heads/yolo"  (attached), NOT a bare 40-char hash (detached)
+jj log -r 'yolo | yolo@origin' --no-graph -T 'commit_id.shortest() ++ "  " ++ bookmarks ++ "\n"'  # both == tip
+```
+
+- A later `jj commit`/`jj new` re-detaches HEAD (jj advances `@`), so this is the *final* step — self-healing on the next ship. Deploys that pin the branch explicitly (`--branch=yolo`) don't need it, but it's cheap insurance.
 
 ### Step 3: Get the CI Run
 
