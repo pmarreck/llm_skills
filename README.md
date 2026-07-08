@@ -72,7 +72,7 @@ for the full mechanism.
 
 | Skill | Lives in | Trigger |
 |---|---|---|
-| `LLMsend` | [`llmsend`](https://github.com/pmarreck/llmsend) (separate repo) | Coordinating between Claude Code sessions running sibling projects via inbox notes + tmux pings |
+| `llmsend` | [`llmsend`](https://github.com/pmarreck/llmsend) (separate repo) | Coordinating between agent sessions running sibling projects via inbox notes + tmux pings |
 
 ## Authoring a new skill
 
