@@ -135,6 +135,37 @@ typically post-v1 surface), flip the switch. Now:
   surface for collision is large; the compile-time guard is mandatory,
   not nice-to-have.
 
+## Producing the translations (quality & model selection)
+
+Getting *complete* catalogs is infrastructure (above). Getting *correct*
+ones is a separate problem that **varies enormously by language** — and the
+failure mode is silent: a general LLM will emit fluent-looking garbage for a
+low-resource language that passes msgfmt, placeholder-parity, and even the
+completeness gate. **Structural gates prove structure, not meaning.**
+
+Non-negotiable rules (the details, tiers, and current model recommendations
+live in the companion **`TRANSLATION_CAPABILITY.md`** — a dated, volatile doc,
+re-benchmark per language before trusting it):
+
+- **Probe every new locale before trusting automated output.** Translate its
+  keyword list + a couple UI strings + one prose sentence, **back-translate**,
+  and eyeball. Anglicized / hallucinated / non-words → it's low-resource;
+  do not ship LLM-only.
+- **Ground terms in an oracle the model didn't produce** — the language's
+  GNOME `.po` files for UI terms, a national/EU terminology DB (téarma.ie,
+  IATE, MS Language Portal) for domain terms. Two LLMs agreeing is NOT
+  independence (MFIC): they're confidently wrong the same way on hard languages.
+- **Pick the model by task and language, not one generalist for all** — a
+  translation-tuned model / dedicated MT (NLLB) often beats a bigger chat LLM
+  at the *translation* task; a "best language-X LLM" may be tuned to converse,
+  not translate.
+- **Maker ≠ checker.** Whoever produced a catalog does not approve it; route to
+  an independent reviewer (ideally a different model family) and, for
+  low-resource prose, a native/community pass — that's the real quality ceiling.
+- **Honest incompleteness beats forced garbage.** Keep completeness WARN-only
+  until a locale is genuinely verified; **drop** a locale no available tool can
+  do faithfully rather than hard-gate hallucinations into the build.
+
 ## Bilingual errors (always, regardless of phase)
 
 Non-English error messages MUST carry the English original in
@@ -158,13 +189,28 @@ and `english_message: string`; the renderer composes them.
 ### `--lang` / locale arg
 
 - Every CLI accepts `--lang <code>` where `<code>` is one of the 50.
-- Env vars are honored in this order: `<APPNAME>_LANG` (project-
-  specific override, e.g. `MYTOOL_LANG`) → `LANG` → `LC_ALL` →
-  `LC_MESSAGES` → `LANGUAGE` (Linux fallback). On macOS, also
-  `AppleLanguages` from `defaults read NSGlobalDomain AppleLanguages`.
-  On Windows, also `GetUserPreferredUILanguages`.
-- `--lang` overrides all of the above.
-- Default fallback if no signal: `en`.
+- Resolve an explicit application request first: `--lang` overrides
+  `<APPNAME>_LANG` (for example, `MYTOOL_LANG`). Do not mutate the
+  parent shell's environment.
+- Without an application request, defer to the platform's native locale
+  resolver; do **not** manually invent an incompatible variable order.
+  On Unix, call `setlocale(LC_ALL, "")`. POSIX categories resolve as
+  `LC_ALL` → `LC_MESSAGES` → `LANG`. With GNU gettext, message catalogs
+  additionally honor `LANGUAGE` as a colon-separated preference list ahead
+  of those variables, but only when the active locale is not `C`.
+- On macOS, honor an explicit Unix locale first. If none yields a usable UI
+  language, use CoreFoundation's `CFLocaleCopyPreferredLanguages()` and pick
+  the first supported catalog. Do not parse `defaults` output;
+  `CFLocaleCopyCurrent()` describes regional formatting and is not the UI
+  language preference. On Windows, use `GetUserPreferredUILanguages()` as
+  the equivalent platform fallback.
+- `LANG`, `LC_MESSAGES`, and `LC_ALL` are system-locale settings;
+  `LANGUAGE` is GNU-gettext-only message-catalog preference. There is no
+  generic `LOCALE` environment variable; `LOCALE_ARCHIVE` is a glibc data
+  path, not a language selector.
+- Fall back to `en` if there is no signal. In enforce phase, an unsupported
+  explicit `--lang` or `<APPNAME>_LANG` must fail loudly, not silently select
+  English.
 
 ### `--lang` is itself translatable
 
@@ -239,8 +285,11 @@ Every project (post-enforce phase) must include these tests:
    `parse("zh") == ZH_HANS`, `parse("zh_TW") == ZH_HANT`,
    `parse("zh_HK") == ZH_HANT`; explicit script beats region
    (`parse("zh_Hant_HK") == ZH_HANT`).
-6. **Env-var precedence** — `--lang fr` beats `LANG=de_DE.UTF-8`; chain
-   tested top to bottom.
+6. **Locale-resolution precedence** — `--lang fr` beats
+   `<APPNAME>_LANG=de`; the app override beats the native resolver; Unix
+   message resolution covers `LC_ALL`, `LC_MESSAGES`, and `LANG`; GNU builds
+   cover `LANGUAGE` including its `C`-locale exception; macOS and Windows
+   adapters have isolated fallback tests.
 
 These tests are the enforcement. Without them, the discipline rots.
 
