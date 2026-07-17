@@ -46,9 +46,12 @@ Callers branch on this: only `created`/`joined-launched` need a kickoff;
    The tool waits for the agent to boot before delivering the ping.
 2. Launch default is resume-then-fresh-fallback (`--resume <name>`); use
    `--fresh` when a clean context matters (most kickoffs).
-3. The keystroke lore is encoded in the tool — plain `Enter` to shells,
-   kitty CSI u (`$'\e[13u'`) only to a running agent. Don't hand-roll the
-   dance; that's how `--name validate_picsu` happened.
+3. The keystroke lore is encoded in the tool: plain `Enter` launches commands
+   in shells; Claude uses kitty CSI u (`$'\e[13u'`) for a running-agent submit;
+   Codex uses tmux bracketed paste followed by plain `Enter` so its paste-burst
+   guard cannot reinterpret submission as a newline. On first launch, the tool
+   accepts Codex's exact project-trust prompt once because the caller already
+   requested unrestricted Codex in that directory. Don't hand-roll this dance.
 4. Humans at a real terminal get auto-attached (or `switch-client`ed inside
    tmux); agents/pipelines never do (tty-detected). `--no-attach` forces off.
 
