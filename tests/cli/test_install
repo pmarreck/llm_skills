@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+source "$HOME/dotfiles/bin/src/capture.bash"
+
+failures=0
+sandbox="$(mktemp -d)"
+
+cleanup() {
+	# This directory is created by this test under TMPDIR and contains no user data.
+	rm -rf -- "$sandbox"
+}
+trap cleanup EXIT
+
+pass() {
+	printf 'PASS: %s\n' "$1"
+}
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_contains() {
+	local label="$1" needle="$2" value="$3"
+	case "$value" in
+		*"$needle"*) pass "$label" ;;
+		*) fail "$label: missing $needle" ;;
+	esac
+}
+
+out='' err='' rc=0
+capture "$ROOT/install" --help
+if [ "$rc" -ne 0 ]; then
+	fail "installer help exited $rc"
+else
+	assert_contains 'installer help documents Codex mode' '--codex' "$out"
+fi
+
+out='' err='' rc=0
+capture "$ROOT/install" --not-an-option
+if [ "$rc" -ne 64 ]; then
+	fail "installer invalid option exited $rc, expected 64"
+else
+	assert_contains 'installer invalid option shows usage' 'Usage:' "$err"
+fi
+
+home="$sandbox/home"
+out='' err='' rc=0
+capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"
+if [ "$rc" -ne 0 ]; then
+	fail "Codex install exited $rc: $err"
+else
+	assert_contains 'Codex install reports success' 'failed=0' "$out"
+	if [ ! -f "$home/.codex/skills/i18n/SKILL.md" ]; then
+		fail 'Codex install places i18n SKILL.md directly in its skill directory'
+	elif [ -L "$home/.codex/skills/i18n" ] || [ -L "$home/.codex/skills/i18n/SKILL.md" ]; then
+		fail 'Codex install dereferences the i18n skill directory and file'
+	elif [ -e "$home/.codex/skills/i18n/i18n" ]; then
+		fail 'Codex install does not nest a skill inside itself after link fallback'
+	else
+		pass 'Codex install creates a direct regular i18n skill'
+	fi
+fi
+
+out='' err='' rc=0
+capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"
+if [ "$rc" -ne 0 ]; then
+	fail "repeat Codex install exited $rc: $err"
+else
+	assert_contains 'repeat Codex install preserves existing skills' 'installed=0' "$out"
+fi
+
+exit "$failures"

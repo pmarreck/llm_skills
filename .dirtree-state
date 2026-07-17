@@ -1,0 +1,8 @@
+# Dirtree: Stateful directory trees in the CLI for humans and LLMs. https://github.com/pmarreck/dirtree
+ver=1.2
+annotate=[
+	MECHATRON_PRIME_CI.md = Portable Mechatron Prime CI target, webhook, and badge policy.
+	install = Installs skills for Claude by symlink or Codex as real copied/hardlinked directories.
+	test = Runs the complete llm_skills installer regression suite.
+	tests/cli/test_install = Regression tests for CLI installer options, copied Codex skills, and rerun safety.
+]

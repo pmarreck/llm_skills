@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+failures=0
+
+if "$ROOT/tests/cli/test_install"; then
+	printf 'PASS: installer integration\n'
+else
+	printf 'FAIL: installer integration\n' >&2
+	failures=$((failures + 1))
+fi
+
+if [ -f "$ROOT/MECHATRON_PRIME_CI.md" ] && [ ! -L "$ROOT/MECHATRON_PRIME_CI.md" ]; then
+	printf 'PASS: Mechatron policy is a portable regular file\n'
+else
+	printf 'FAIL: Mechatron policy must be a regular tracked file\n' >&2
+	failures=$((failures + 1))
+fi
+
+exit "$failures"

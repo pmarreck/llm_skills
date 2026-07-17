@@ -23,11 +23,23 @@ safe (backs up any existing `~/.claude/skills` directory or
 foreign-target symlink to `.bak.<timestamp>` before linking), and
 describes its full plan before prompting for confirmation.
 
-Other LLM coding harnesses (Codex, Gemini CLI, etc.) often follow the
-same `~/.<harness>/skills/` convention; symlinking this repo into their
-skill paths works the same way. The skills themselves are plain
-Markdown with YAML frontmatter — they're not Claude-Code-specific in
-content, only in discovery.
+Codex also uses a `~/.codex/skills/` directory, but Codex 0.142.x skips
+symlinked skill directories and symlinked `SKILL.md` files during
+discovery. Install missing skills for Codex with:
+
+```sh
+./install --codex
+```
+
+That mode creates real directories under `~/.codex/skills`, hardlinks
+regular files where possible, and dereferences symlinked skill sources
+such as `about-peter` and `llmsend`.
+
+Other LLM coding harnesses (Gemini CLI, etc.) often follow the same
+`~/.<harness>/skills/` convention; symlinking this repo may work for
+them, depending on their discovery rules. The skills themselves are
+plain Markdown with YAML frontmatter — they're not Claude-Code-specific
+in content, only in discovery.
 
 ## How skills work
 
