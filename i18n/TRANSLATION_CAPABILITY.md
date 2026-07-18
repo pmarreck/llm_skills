@@ -2,7 +2,7 @@
 purpose: Per-language machine-translation capability + the source-grounded production workflow for multilingual UI. Companion to SKILL.md.
 audience: agent
 maintained_by: agent
-last_verified: 2026-07-17
+last_verified: 2026-07-18
 volatile: true  # model landscape changes fast — RE-BENCHMARK per language; do not trust specific model names/scores past ~6 months
 ---
 
@@ -63,9 +63,14 @@ non-words → it's Tier 2+.
 - **Tier 1 — general LLMs handle well** (high + many mid-resource): en es de fr nl pt it ru
   ar he zh ja ko, and (per Gemma-12B tests) **fa/prs (Persian/Dari), ur (Urdu), am (Amharic),
   km (Khmer)** came back essentially correct. → local Gemma/cloud + review.
+  **VERIFIED (fsearch, 2026-07): `ur` and `prs` shipped 388/388 via local `gemma4:12b`** —
+  correct script, keyword lists localized, UI terms right. Confirmed Tier-1 for Gemma.
 - **Tier 2 — general LLMs FABRICATE; need a specialized model / tuned MT + term grounding +
   native prose review:** **ga (Irish), ka (Georgian), ha (Hausa), yo (Yoruba)**, and likely
-  most genuinely low-resource languages.
+  most genuinely low-resource languages. **CONCRETE (2026-07): Gemma-12B translated Georgian
+  "Folders" as "Sockets" (საკეტები)** on a back-translation probe — a clean semantic error a
+  structural gate can't see. `ka` was produced via **Google Translate instead** (Folders →
+  საქაღალდეები ✓), 388/388, pending native polish.
 - **Tier 3 — no reliable automated path; native / authoritative source only, or drop:**
   **ie (Interlingue — a *constructed* language, ~no training data), ig (Igbo)**, and the
   rarest. Every LLM (incl. frontier) hallucinates these; do not ship LLM-only.
@@ -91,10 +96,45 @@ non-words → it's Tier 2+.
   - **Google Translate / EU eTranslation** — decent for EU official languages, **zero-setup**;
     validated our Irish term glossary but **wrong on domain terms** (`abairt rialta`) → override
     with the terminology DB. Good enough as a *prose draft source* for Tier-2 when a local
-    specialized model is too much setup.
+    specialized model is too much setup. **VERIFIED: produced the whole `ka` (Georgian) catalog
+    well** (common terms right, structure preserved) — but it **mangles CLI command syntax**
+    (translates/reorders `fsearch config show`, flags, `--yes`), so the ~16 CLI-help/usage
+    blocks need **house-style** (translate only descriptions; keep commands/flags/UPPERCASE
+    tokens/examples byte-identical to source via literal-substring replacement).
   - **DeepL** — high-resource only (no Irish, no most low-resource).
 - **`translate vs chat`:** for filling `msgstr`, prefer *translation* models / MT over chat
   LLMs; a "best Irish LLM" headline can hide that it's tuned to *converse*, not *translate*.
+
+## Operational notes: driving a local model through a data-only tool (verified 2026-07)
+
+Hard-won running Gemma via ollama through a PO-translation tool that enforces a JSON-schema
+"translations array" contract. These are *tooling* lessons, orthogonal to per-language quality:
+
+- **The JSON-schema `format` (structured-output) constraint deterministically STALLS the model
+  on long outputs.** gemma4:12b emits `{"translations": ["` then the stream dies (no `done`, no
+  error) whenever it must generate a long string (the giant CLI-help blocks). At `temperature:0`
+  it stalls *identically every retry*. **Plain (no-`format`) generation of the same block works.**
+  → **Fix:** on a stall (or a slot-count validation failure) at batch-size 1, re-request WITHOUT
+  the schema and wrap the plain text as the single slot; all structural guards still run. Ship
+  this as a fallback in any local-model translation tool.
+- **Use `batch_size=1` for local models.** Larger batches make the model return the wrong *count*
+  of array elements (it merges/splits multiline entries). One entry per request makes the
+  contract trivial.
+- **Incremental save is mandatory for long runs.** An all-or-nothing apply loses a 40-min run to
+  a single failure at entry 322. Merge each validated batch into the catalog immediately so
+  failures persist progress and re-runs resume (the tool skips already-translated entries). This
+  is what let `prs` recover across two failures (321→383→388) instead of restarting.
+- **Degenerate msgids fool the model.** `(empty)` → gemma reads the parenthetical as an
+  instruction and returns *nothing* (both modes). Accelerator labels (`Open _With`) come back
+  malformed. Keep a tiny hand-finish path for these literals; don't let one abort the run.
+- **`num_ctx` is unset by default** (~4K in ollama) — raise it (e.g. 16384) for big blocks; not
+  the stall's root cause but correct hygiene.
+- **Trust the structural gate to catch silent producer bugs.** A source-extraction bug that only
+  read *continuation* segments silently skipped every single-line msgid (321 entries) — invisible
+  until `msgfmt --statistics` showed **71 translated, not 388**. The gate doesn't prove meaning,
+  but it *does* catch "half the catalog is quietly empty."
+- **RTL/non-Latin accelerators:** drop the `_` mnemonic marker (Latin-letter accelerators don't
+  map to Arabic/Georgian script); `ur`/`prs`/`ka` all did.
 
 ## The honest ceiling
 
