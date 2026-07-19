@@ -10,7 +10,7 @@ sandbox="$(mktemp -d)"
 
 cleanup() {
 	# This directory is created by this test under TMPDIR and contains no user data.
-	rm -rf -- "$sandbox"
+	rm -rf "$sandbox"
 }
 trap cleanup EXIT
 
@@ -63,6 +63,12 @@ else
 	else
 		pass 'Codex install creates a direct regular i18n skill'
 	fi
+fi
+
+if [ -f "$home/.codex/skills/mechatron-ci/SKILL.md" ] && [ -f "$home/.codex/skills/mechatron-ci/agents/openai.yaml" ]; then
+	pass 'Codex install includes the shared Mechatron skill'
+else
+	fail 'Codex install includes the shared Mechatron skill'
 fi
 
 out='' err='' rc=0

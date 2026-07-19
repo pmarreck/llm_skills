@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mechatron CI"
+  short_description: "Configure projects for Thelio CI"
+  default_prompt: "Use $mechatron-ci to add Mechatron Prime CI to this project."

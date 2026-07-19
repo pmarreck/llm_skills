@@ -3,3 +3,6 @@
 AGENTS*.md
 CLAUDE*.md
 .watchman-cookie-*
+
+# Bundled Codex skills are machine-local, not shared workflows.
+.system/

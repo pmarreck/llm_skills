@@ -19,4 +19,25 @@ else
 	failures=$((failures + 1))
 fi
 
+if [ -f "$ROOT/mechatron-ci/SKILL.md" ] && [ -f "$ROOT/mechatron-ci/agents/openai.yaml" ]; then
+	printf 'PASS: Mechatron skill is shared with both agents\n'
+else
+	printf 'FAIL: Mechatron skill must include its instructions and UI metadata\n' >&2
+	failures=$((failures + 1))
+fi
+
+if git -C "$ROOT" check-ignore -q .system/example/SKILL.md; then
+	printf 'PASS: Codex bundled skills stay out of the shared repository\n'
+else
+	printf 'FAIL: Codex bundled skills must be ignored by the shared repository\n' >&2
+	failures=$((failures + 1))
+fi
+
+if "$ROOT/tests/cli/test_codex_sync"; then
+	printf 'PASS: Codex hook sync integration\n'
+else
+	printf 'FAIL: Codex hook sync integration\n' >&2
+	failures=$((failures + 1))
+fi
+
 exit "$failures"

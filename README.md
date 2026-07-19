@@ -23,17 +23,31 @@ safe (backs up any existing `~/.claude/skills` directory or
 foreign-target symlink to `.bak.<timestamp>` before linking), and
 describes its full plan before prompting for confirmation.
 
-Codex also uses a `~/.codex/skills/` directory, but Codex 0.142.x skips
-symlinked skill directories and symlinked `SKILL.md` files during
-discovery. Install missing skills for Codex with:
+Codex also uses a `~/.codex/skills/` directory, but Codex skips symlinked
+skill directories and symlinked `SKILL.md` files during discovery. Install
+missing skills for Codex with:
 
 ```sh
 ./install --codex
 ```
 
-That mode creates real directories under `~/.codex/skills`, hardlinks
-regular files where possible, and dereferences symlinked skill sources
-such as `about-peter` and `llmsend`.
+That mode creates real directories under `~/.codex/skills` and dereferences
+symlinked skill sources such as `about-peter` and `llmsend`.
+
+To keep those real Codex directories synchronized after a pull, checkout, or
+merge, opt in once per clone:
+
+```sh
+./install --codex --sync
+```
+
+It sets `core.hooksPath=.githooks` in this repository's local Git config only.
+The tracked `post-checkout` and `post-merge` hooks announce that they are
+running, print the exact hook location, and refresh only skills managed by
+this repository. A staged replacement preserves any replaced managed skill in
+`~/.codex/backups/llm-skills-sync.*`; local-only skills and Codex's `.system/`
+bundle are untouched. The installer and hooks use portable Bash, Git, `cp`,
+`diff`, and `find` options compatible with macOS and Linux.
 
 Other LLM coding harnesses (Gemini CLI, etc.) often follow the same
 `~/.<harness>/skills/` convention; symlinking this repo may work for
@@ -70,6 +84,7 @@ for the full mechanism.
 | [`handoff`](handoff/SKILL.md) | Writing a session handoff document so a fresh agent can pick up the work with full purpose + intent |
 | [`i18n`](i18n/SKILL.md) | Any user-facing UI work involving translations, locales, `--lang`, RTL, or bilingual errors |
 | [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
+| [`mechatron-ci`](mechatron-ci/SKILL.md) | Configure or audit a project for Thelio-hosted Mechatron Prime CI |
 
 ### Zig-specific
 

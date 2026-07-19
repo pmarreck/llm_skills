@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -u
+
+hook_name="${1:?hook name is required}"
+hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+repo_root="$(cd "$hook_dir/.." && pwd -P)"
+hook_path="$hook_dir/$hook_name"
+
+printf 'llm_skills: %s hook running from %s\n' "$hook_name" "$hook_path"
+printf 'llm_skills: syncing Codex skills from %s\n' "$repo_root"
+
+if "$repo_root/install" --codex --sync --from-hook; then
+	printf 'llm_skills: Codex sync completed. Hook location: %s\n' "$hook_path"
+else
+	printf 'llm_skills: WARNING: Codex sync failed; inspect %s and run %s/install --codex --sync\n' "$hook_path" "$repo_root" >&2
+	exit 1
+fi
