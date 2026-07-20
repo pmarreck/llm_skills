@@ -290,6 +290,26 @@ Every project (post-enforce phase) must include these tests:
    message resolution covers `LC_ALL`, `LC_MESSAGES`, and `LANG`; GNU builds
    cover `LANGUAGE` including its `C`-locale exception; macOS and Windows
    adapters have isolated fallback tests.
+7. **Alias-inference disjointness** — if you infer the UI language from a
+   *localized* alias present in the args (e.g. `--hilfe` ⇒ German), every
+   non-English locale's alias-name set MUST be **disjoint** from the English
+   canonical set. Enforce it as a set-classifier over the full cross-product
+   (each non-English name × every English name), not a spot check. This is
+   the MFIC-correct form: mechanically swept, and it fails on the *specific*
+   defect below. **Why it bites (real bug, dirtree 2026-07):** locale files
+   are usually seeded by copying `en.zig`, and a translator leaves an English
+   canonical token behind un-translated — `ur` kept `note`, `es` kept
+   `--color`, `hi` kept `--path`, `nb`/`da` kept `--test`. Because inference
+   skips English but returns the *first non-English* locale whose alias
+   matches an argument, typing a plain English word (`dirtree note …`,
+   `--color`, `--test`) silently switched the entire UI into Urdu / Spanish /
+   Danish. The English token still resolves via the English table, so the
+   fix is pure deletion from the non-English tables — zero functionality lost.
+   A companion behavioral test (`inferLocaleFromAliases([<each English
+   canonical token>]) == none`) pins the user-facing guarantee. Corollary:
+   coincidental homographs count too — Spanish `color`, Danish `test` are the
+   same spelling as English, so they must NOT live in the localized table;
+   the English table already provides them.
 
 These tests are the enforcement. Without them, the discipline rots.
 
