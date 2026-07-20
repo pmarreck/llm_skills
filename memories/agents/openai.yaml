@@ -1,0 +1,4 @@
+interface:
+  display_name: "Memory Stewardship"
+  short_description: "Curate and validate durable memory metadata"
+  default_prompt: "Use $memories to organize and consolidate shared and project memory roots."

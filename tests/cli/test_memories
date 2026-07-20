@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+CHECKER="$ROOT/memories/scripts/check-frontmatter"
+MIGRATOR="$ROOT/memories/scripts/migrate-legacy"
+failures=0
+sandbox="$(mktemp -d "${TMPDIR:-/tmp}/llm-skills-memories.XXXXXX")"
+memory_root="$sandbox/memories"
+trap 'rm -rf "$sandbox"' EXIT
+mkdir -p "$memory_root"
+
+pass() {
+	printf 'PASS: %s\n' "$1"
+}
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+if [ -f "$ROOT/memories/SKILL.md" ]; then
+	pass 'shared memories skill exists'
+else
+	fail 'shared memories skill exists'
+fi
+
+if [ -x "$CHECKER" ]; then
+	pass 'frontmatter checker is executable'
+else
+	fail 'frontmatter checker is executable'
+fi
+
+printf '%s\n' \
+	'---' \
+	'description: "Valid memory metadata remains machine-checkable."' \
+	'datetime: 2026-07-20T09:00:00-04:00 # America/New_York (EDT)' \
+	'tags: [memory, memories, metadata, frontmatter]' \
+	'---' \
+	'' \
+	'Body deliberately contains a misleading token: datetime: not-a-header.' \
+	> "$memory_root/valid.frontmatter.md"
+
+if "$CHECKER" "$memory_root" >"$sandbox/valid.out" 2>"$sandbox/valid.err"; then
+	pass 'checker accepts valid frontmatter without reading body tokens as metadata'
+else
+	fail 'checker accepts valid frontmatter without reading body tokens as metadata'
+fi
+
+printf '%s\n' \
+	'---' \
+	'description: "Missing timezone must fail validation."' \
+	'datetime: 2026-07-20T09:00:00 # America/New_York (EDT)' \
+	'tags: [memory]' \
+	'---' \
+	> "$memory_root/missing-timezone.frontmatter.md"
+
+if "$CHECKER" "$memory_root/missing-timezone.frontmatter.md" >"$sandbox/invalid.out" 2>"$sandbox/invalid.err"; then
+	fail 'checker rejects datetime without timezone'
+elif rg -q 'timezone-aware ISO 8601' "$sandbox/invalid.err"; then
+	pass 'checker explains missing timezone'
+else
+	fail 'checker explains missing timezone'
+fi
+
+printf '%s\n' \
+	'---' \
+	'description: "Legacy name must be migrated."' \
+	'datetime: 2026-07-20T09:00:00-04:00' \
+	'tags: [memory]' \
+	'---' \
+	> "$memory_root/legacy-memory"
+
+if "$CHECKER" "$memory_root" >"$sandbox/name.out" 2>"$sandbox/name.err"; then
+	fail 'checker rejects a non-frontmatter Markdown filename'
+elif rg -q 'must end in .frontmatter.md' "$sandbox/name.err"; then
+	pass 'checker explains filename contract'
+else
+	fail 'checker explains filename contract'
+fi
+
+legacy_root="$sandbox/legacy"
+mkdir -p "$legacy_root"
+printf '%s\n' 'Nix flakes must retain tracked policy inputs.' > "$legacy_root/Nix flakes need tracked policy"
+
+if "$MIGRATOR" --dry-run "$legacy_root" >"$sandbox/migrate-preview.out" 2>"$sandbox/migrate-preview.err"; then
+	if [ -f "$legacy_root/Nix flakes need tracked policy" ] && [ ! -e "$legacy_root/Nix flakes need tracked policy.frontmatter.md" ] && rg -q 'nix, nixos, flakes' "$sandbox/migrate-preview.out" && ! rg -q 'flakes, flakes' "$sandbox/migrate-preview.out"; then
+		pass 'migrator previews aliases without changing legacy memory'
+	else
+		fail 'migrator previews aliases without changing legacy memory'
+	fi
+else
+	fail 'migrator previews aliases without changing legacy memory'
+fi
+
+if "$MIGRATOR" --apply "$legacy_root" >"$sandbox/migrate-apply.out" 2>"$sandbox/migrate-apply.err" && [ -f "$legacy_root/Nix flakes need tracked policy.frontmatter.md" ] && [ ! -e "$legacy_root/Nix flakes need tracked policy" ] && "$CHECKER" "$legacy_root" >"$sandbox/migrated-check.out" 2>"$sandbox/migrated-check.err"; then
+	pass 'migrator creates a checked frontmatter memory'
+else
+	fail 'migrator creates a checked frontmatter memory'
+fi
+
+exit "$failures"

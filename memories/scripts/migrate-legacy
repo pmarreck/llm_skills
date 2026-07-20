@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+
+# Migrate durable lessons to Peter's frontmatter contract. Run --dry-run first.
+
+set -u
+set -f
+
+mode=''
+failures=0
+
+usage() {
+	printf '%s\n' 'Usage: migrate-legacy --dry-run|--apply MEMORY_ROOT_OR_FILE...'
+	printf '%s\n' 'Adds frontmatter, renames files to *.frontmatter.md, and preserves Markdown bodies.'
+}
+
+report_failure() {
+	printf '%s: %s\n' "$1" "$2" >&2
+	failures=$((failures + 1))
+}
+
+add_tag() {
+	local tag="$1"
+	case "$tag" in
+		''|*[!a-z0-9-]*) return ;;
+	esac
+	case ",${tags// /}," in
+		*,"$tag",*) ;;
+		*)
+			if [ -n "$tags" ]; then
+				tags="$tags, $tag"
+			else
+				tags="$tag"
+			fi
+			;;
+	esac
+}
+
+add_aliases() {
+	local word="$1"
+	case "$word" in
+		nix|nixos|nixpkgs|flake|flakes)
+			add_tag nix; add_tag nixos; add_tag flakes
+			;;
+		zig) add_tag zig; add_tag ziglang ;;
+		rust|cargo) add_tag rust; add_tag cargo ;;
+		wat|wasm|webassembly|wasmtime)
+			add_tag wat; add_tag wasm; add_tag webassembly
+			;;
+		llm|llms|openai|ollama|codex|claude)
+			add_tag llm; add_tag ai; add_tag language-model
+			;;
+		test|tests|testing|test-suite|test-suites|tdd)
+			add_tag test; add_tag tests; add_tag testing
+			;;
+		gettext|translation|translations|localization|locale|locales|language|languages|i18n|l10n)
+			add_tag i18n; add_tag l10n; add_tag localization; add_tag translation
+			;;
+		mac|macos|darwin|apple)
+			add_tag macos; add_tag darwin; add_tag apple
+			;;
+		windows|win32|gnullvm)
+			add_tag windows; add_tag win32
+			;;
+		linux) add_tag linux ;;
+		git|github)
+			add_tag git; add_tag version-control
+			;;
+		mechatron|mechatron-prime)
+			add_tag mechatron; add_tag ci; add_tag continuous-integration
+			;;
+		tailscale|tailnet|vpn|funnel)
+			add_tag tailscale; add_tag tailnet; add_tag vpn; add_tag networking
+			;;
+		webhook|webhooks) add_tag webhook; add_tag webhooks ;;
+		zfs|filesystem|storage|disk|disks|ssd|hdd)
+			add_tag storage; add_tag filesystem
+			;;
+		gpui|gui|canvas|display)
+			add_tag gui; add_tag graphics
+			;;
+		ssh) add_tag ssh; add_tag remote-access ;;
+	esac
+}
+
+suggest_tags() {
+	local title="$1" existing="$2" word cleaned
+	tags=''
+	cleaned=${existing#\[}
+	cleaned=${cleaned%\]}
+	while IFS= read -r word; do
+		word=$(printf '%s' "$word" | tr -d '[:space:]')
+		add_tag "$word"
+		add_aliases "$word"
+	done < <(printf '%s' "$cleaned" | tr ',' '\n')
+	for word in $(printf '%s\n' "$title" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '\n'); do
+		case "$word" in
+			a|after|all|an|and|any|are|as|at|be|before|because|belongs|by|can|cannot|change|changes|code|complete|does|done|even|every|first|followed|for|from|has|have|in|inside|into|is|it|its|keep|large|late|local|must|need|needs|not|of|on|only|or|own|per|plain|require|requires|should|so|some|stay|that|the|their|these|through|to|under|use|uses|was|while|with|without)
+				continue
+				;;
+		esac
+		if [ "${#word}" -ge 3 ]; then
+			add_tag "$word"
+			add_aliases "$word"
+		fi
+	done
+}
+
+frontmatter_value() {
+	local file="$1" key="$2"
+	awk -v key="$key" '
+		NR == 1 && $0 != "---" { exit }
+		NR == 1 { next }
+		$0 == "---" { exit }
+		index($0, key ": ") == 1 { print substr($0, length(key) + 3); exit }
+	' "$file"
+}
+
+body_from_file() {
+	awk '
+		NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+		in_frontmatter && $0 == "---" { in_frontmatter = 0; next }
+		!in_frontmatter { print }
+	' "$1"
+}
+
+creation_epoch() {
+	local file="$1" epoch=''
+	epoch=$(stat -c '%W' "$file" 2>/dev/null || true)
+	case "$epoch" in
+		''|0|-1) epoch=$(stat -c '%Y' "$file" 2>/dev/null || true) ;;
+	esac
+	case "$epoch" in
+		''|0|-1) epoch=$(stat -f '%B' "$file" 2>/dev/null || true) ;;
+	esac
+	case "$epoch" in
+		''|0|-1) epoch=$(stat -f '%m' "$file" 2>/dev/null || true) ;;
+	esac
+	printf '%s\n' "$epoch"
+}
+
+eastern_datetime() {
+	local epoch="$1" stamp date_part remainder offset zone
+	if stamp=$(TZ=America/New_York date -d "@$epoch" '+%Y-%m-%dT%H:%M:%S %z %Z' 2>/dev/null); then
+		:
+	else
+		stamp=$(TZ=America/New_York date -r "$epoch" '+%Y-%m-%dT%H:%M:%S %z %Z')
+	fi
+	date_part=${stamp%% *}
+	remainder=${stamp#* }
+	offset=${remainder%% *}
+	zone=${remainder#* }
+	offset=$(printf '%s\n' "$offset" | sed -E 's/^([+-][0-9][0-9])([0-9][0-9])$/\1:\2/')
+	printf '%s%s # America/New_York (%s)\n' "$date_part" "$offset" "$zone"
+}
+
+escape_yaml_string() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+migrate_file() {
+	local file="$1" base title target description existing_tags datetime epoch dir tmp
+	base=${file##*/}
+	case "$base" in
+		*.frontmatter.md)
+			title=${base%.frontmatter.md}
+			target="$file"
+			;;
+		*)
+			title=$base
+			target="$file.frontmatter.md"
+			if [ -e "$target" ]; then
+				report_failure "$file" "target already exists: $target"
+				return
+			fi
+			;;
+	esac
+	title=$(printf '%s' "$title" | tr '-' ' ')
+
+	description=$(frontmatter_value "$file" description)
+	if [ -z "$description" ]; then
+		description="\"$(escape_yaml_string "$title.")\""
+	fi
+	existing_tags=$(frontmatter_value "$file" tags)
+	suggest_tags "$title" "$existing_tags"
+	epoch=$(creation_epoch "$file")
+	case "$epoch" in
+		''|*[!0-9]*)
+			report_failure "$file" 'could not determine a creation or modification datetime'
+			return
+			;;
+	esac
+	datetime=$(eastern_datetime "$epoch")
+
+	if [ "$mode" = dry-run ]; then
+		printf 'MIGRATE %s -> %s\n' "$file" "$target"
+		printf '  description: %s\n' "$description"
+		printf '  datetime: %s\n' "$datetime"
+		printf '  tags: [%s]\n' "$tags"
+		return
+	fi
+
+	dir=$(dirname "$file")
+	if ! tmp=$(mktemp "$dir/.${base}.frontmatter.XXXXXX"); then
+		report_failure "$file" 'could not stage migrated content'
+		return
+	fi
+	{
+		printf '%s\n' '---'
+		printf 'description: %s\n' "$description"
+		printf 'datetime: %s\n' "$datetime"
+		printf 'tags: [%s]\n' "$tags"
+		printf '%s\n\n' '---'
+		body_from_file "$file"
+	} > "$tmp"
+	if ! mv "$tmp" "$file"; then
+		report_failure "$file" 'could not replace staged migrated content'
+		return
+	fi
+	if [ "$target" != "$file" ] && ! mv "$file" "$target"; then
+		report_failure "$file" "content migrated but rename failed: $target"
+		return
+	fi
+	printf 'MIGRATED %s -> %s\n' "$file" "$target"
+}
+
+migrate_path() {
+	local path="$1" file
+	if [ -f "$path" ]; then
+		migrate_file "$path"
+	elif [ -d "$path" ]; then
+		while IFS= read -r file; do
+			[ -n "$file" ] || continue
+			migrate_file "$file"
+		done < <(find "$path" -type f -print)
+	else
+		report_failure "$path" 'does not exist or is not a regular file or directory'
+	fi
+}
+
+case "${1:-}" in
+	--dry-run) mode=dry-run; shift ;;
+	--apply) mode=apply; shift ;;
+	--help|-h) usage; exit 0 ;;
+	*) usage >&2; exit 64 ;;
+esac
+
+if [ "$#" -eq 0 ]; then
+	usage >&2
+	exit 64
+fi
+
+for path in "$@"; do
+	migrate_path "$path"
+done
+
+exit "$failures"

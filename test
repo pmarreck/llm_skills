@@ -40,4 +40,11 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_memories"; then
+	printf 'PASS: memory frontmatter skill integration\n'
+else
+	printf 'FAIL: memory frontmatter skill integration\n' >&2
+	failures=$((failures + 1))
+fi
+
 exit "$failures"
