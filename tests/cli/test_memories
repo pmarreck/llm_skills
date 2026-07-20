@@ -83,6 +83,7 @@ fi
 legacy_root="$sandbox/legacy"
 mkdir -p "$legacy_root"
 printf '%s\n' 'Nix flakes must retain tracked policy inputs.' > "$legacy_root/Nix flakes need tracked policy"
+cp "$legacy_root/Nix flakes need tracked policy" "$sandbox/original-body"
 
 if "$MIGRATOR" --dry-run "$legacy_root" >"$sandbox/migrate-preview.out" 2>"$sandbox/migrate-preview.err"; then
 	if [ -f "$legacy_root/Nix flakes need tracked policy" ] && [ ! -e "$legacy_root/Nix flakes need tracked policy.frontmatter.md" ] && rg -q 'nix, nixos, flakes' "$sandbox/migrate-preview.out" && ! rg -q 'flakes, flakes' "$sandbox/migrate-preview.out"; then
@@ -94,10 +95,14 @@ else
 	fail 'migrator previews aliases without changing legacy memory'
 fi
 
-if "$MIGRATOR" --apply "$legacy_root" >"$sandbox/migrate-apply.out" 2>"$sandbox/migrate-apply.err" && [ -f "$legacy_root/Nix flakes need tracked policy.frontmatter.md" ] && [ ! -e "$legacy_root/Nix flakes need tracked policy" ] && "$CHECKER" "$legacy_root" >"$sandbox/migrated-check.out" 2>"$sandbox/migrated-check.err"; then
+memory_body() {
+	awk 'NR == 1 && $0 == "---" { in_frontmatter = 1; next } in_frontmatter && $0 == "---" { in_frontmatter = 0; next } !in_frontmatter { print }' "$1"
+}
+
+if "$MIGRATOR" --apply "$legacy_root" >"$sandbox/migrate-apply.out" 2>"$sandbox/migrate-apply.err" && [ -f "$legacy_root/Nix flakes need tracked policy.frontmatter.md" ] && [ ! -e "$legacy_root/Nix flakes need tracked policy" ] && "$CHECKER" "$legacy_root" >"$sandbox/migrated-check.out" 2>"$sandbox/migrated-check.err" && cmp -s "$sandbox/original-body" <(memory_body "$legacy_root/Nix flakes need tracked policy.frontmatter.md"); then
 	pass 'migrator creates a checked frontmatter memory'
 else
-	fail 'migrator creates a checked frontmatter memory'
+	fail 'migrator creates a checked frontmatter memory without altering its body'
 fi
 
 exit "$failures"

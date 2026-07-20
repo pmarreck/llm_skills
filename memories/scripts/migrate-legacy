@@ -209,7 +209,7 @@ migrate_file() {
 		printf 'description: %s\n' "$description"
 		printf 'datetime: %s\n' "$datetime"
 		printf 'tags: [%s]\n' "$tags"
-		printf '%s\n\n' '---'
+		printf '%s\n' '---'
 		body_from_file "$file"
 	} > "$tmp"
 	if ! mv "$tmp" "$file"; then
