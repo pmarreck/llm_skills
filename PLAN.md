@@ -1,5 +1,26 @@
 # Plan
 
+- [x] Move the private `about-peter` context pack off the retired
+  Documents-CloudManaged path into a new private `llm-skills-private` sibling
+  repo (github.com/pmarreck/llm-skills-private, branch `yolo`) holding the whole
+  `peter_ai_context/` pack + an `about-peter/` wrapper. Repoint the tracked
+  `about-peter` symlink, preserve the legacy `peter_ai_context` path via a
+  compat symlink, and replicate to thelio-nixos (clone + symlink + Codex
+  materialization). Completed 2026-07-21 18:24 EDT. Curiosity poke: the shared
+  repo now carries only a symlink into the private sibling — private content
+  never lands in `llm_skills`, and machines lacking the private clone degrade
+  gracefully.
+- [x] Make the Codex installer/`--sync` skip a skill whose `SKILL.md` source
+  can't be materialized (dangling/external symlink) with a warning, instead of
+  aborting the whole run; proved mechanically with a synthetic
+  dangling-symlink skill (retires the fragile `rm`-based fixture that `rm-safe`
+  refused). Completed 2026-07-21 17:30 EDT.
+- [x] Remove the unused 9-skill Cloudflare suite (agents-sdk, cloudflare,
+  cloudflare-email-service, durable-objects, sandbox-sdk, turnstile-spin,
+  web-perf, workers-best-practices, wrangler) from the shared repo and both
+  machines' Codex copies; annotate every remaining skill dir with a dirtree
+  note. Completed 2026-07-21 18:22 EDT.
+
 - [x] Depersonalize the public `memories` skill while preserving local owner
   conventions as ordinary shared memories.
   - [x] Reject names, handles, locations, and owner-specific timezones across
