@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+
+# Prove recall discovery stays metadata-only, deterministic, and sourceable.
+
+set -u
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+subject="$ROOT/memories/scripts/list-titles"
+failures=0
+sandbox=$(mktemp -d "${TMPDIR:-/tmp}/memories-list-titles.XXXXXX")
+expected_titles=''
+expected_headers=''
+
+cleanup() {
+	case "$sandbox" in
+		"${TMPDIR:-/tmp}"/memories-list-titles.*) rm -rf -- "$sandbox" ;;
+	esac
+}
+trap cleanup EXIT
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_equal() {
+	local label="$1" expected="$2" actual="$3"
+	if [ "$actual" != "$expected" ]; then
+		fail "$label"
+		printf '  expected: %q\n' "$expected" >&2
+		printf '  actual:   %q\n' "$actual" >&2
+	fi
+}
+
+write_memory() {
+	local path="$1" description="$2" datetime="$3" tags="$4" body="$5"
+	printf '%s\n' \
+		'---' \
+		"description: \"$description\"" \
+		"datetime: $datetime" \
+		"tags: [$tags]" \
+		'---' \
+		"$body" > "$path"
+}
+
+mkdir -p "$sandbox/home/MEMORIES" "$sandbox/project/MEMORIES"
+write_memory \
+	"$sandbox/home/MEMORIES/Zebra lesson.frontmatter.md" \
+	'Last shared title sorts last.' \
+	'2026-07-19T10:00:00-04:00 # America/New_York (EDT)' \
+	'memory, shared' \
+	'SHARED BODY MUST NOT APPEAR'
+write_memory \
+	"$sandbox/home/MEMORIES/Alpha lesson.frontmatter.md" \
+	'First shared title sorts first.' \
+	'2026-07-18T09:00:00-04:00 # America/New_York (EDT)' \
+	'memory, shared' \
+	'another hidden body'
+write_memory \
+	"$sandbox/project/MEMORIES/Project lesson.frontmatter.md" \
+	'Project-only title.' \
+	'2026-07-20T11:00:00-04:00 # America/New_York (EDT)' \
+	'memory, project' \
+	'PROJECT BODY MUST NOT APPEAR'
+mkdir -p "$sandbox/project/MEMORIES/not-a-memory-file"
+
+titles=$(HOME="$sandbox/home" "$subject" "$sandbox/project" 2>"$sandbox/titles.err")
+status=$?
+assert_equal 'title listing exits successfully' '0' "$status"
+expected_titles=$(printf '%s\n' \
+	$'shared\tAlpha lesson.frontmatter.md' \
+	$'shared\tZebra lesson.frontmatter.md' \
+	$'project\tProject lesson.frontmatter.md')
+assert_equal 'title listing keeps deterministic scope-classified sets' "$expected_titles" "$titles"
+assert_equal 'title listing keeps stderr clean' '' "$(<"$sandbox/titles.err")"
+
+headers=$(HOME="$sandbox/home" "$subject" --headers "$sandbox/project" 2>"$sandbox/headers.err")
+status=$?
+assert_equal 'header listing exits successfully' '0' "$status"
+expected_headers=$(printf '%s\n' \
+	$'shared\tAlpha lesson.frontmatter.md\t"First shared title sorts first."\t2026-07-18T09:00:00-04:00 # America/New_York (EDT)\t[memory, shared]' \
+	$'shared\tZebra lesson.frontmatter.md\t"Last shared title sorts last."\t2026-07-19T10:00:00-04:00 # America/New_York (EDT)\t[memory, shared]' \
+	$'project\tProject lesson.frontmatter.md\t"Project-only title."\t2026-07-20T11:00:00-04:00 # America/New_York (EDT)\t[memory, project]')
+assert_equal 'header listing preserves validated metadata and replaces paths with scopes' "$expected_headers" "$headers"
+assert_equal 'header listing keeps stderr clean' '' "$(<"$sandbox/headers.err")"
+
+mkdir -p "$sandbox/empty-home" "$sandbox/empty-project"
+empty=$(HOME="$sandbox/empty-home" "$subject" "$sandbox/empty-project" 2>"$sandbox/empty.err")
+status=$?
+assert_equal 'missing memory roots are harmless' '0' "$status"
+assert_equal 'missing memory roots produce no titles' '' "$empty"
+assert_equal 'missing memory roots keep stderr clean' '' "$(<"$sandbox/empty.err")"
+
+sourced=$(HOME="$sandbox/home" bash -c '
+	set -u
+	source "$1"
+	type -t list_memory_titles
+' bash "$subject" 2>"$sandbox/source.err")
+status=$?
+assert_equal 'the helper is sourceable' '0' "$status"
+assert_equal 'sourcing defines a Bash function without running it' 'function' "$sourced"
+assert_equal 'sourcing keeps stderr clean' '' "$(<"$sandbox/source.err")"
+
+default_titles=$(HOME="$sandbox/home" bash -c '
+	set -u
+	cd "$2"
+	"$1"
+' bash "$subject" "$sandbox/project" 2>"$sandbox/default.err")
+status=$?
+assert_equal 'default project discovery falls back to the working directory outside Git' '0' "$status"
+assert_equal 'default project discovery lists the same classified set' "$expected_titles" "$default_titles"
+assert_equal 'default project discovery keeps stderr clean' '' "$(<"$sandbox/default.err")"
+
+nullglob_state=$(HOME="$sandbox/home" bash -c '
+	set -u
+	shopt -s nullglob
+	source "$1"
+	list_memory_titles "$2" >/dev/null
+	if shopt -q nullglob; then
+		printf enabled
+	else
+		printf disabled
+	fi
+' bash "$subject" "$sandbox/project" 2>"$sandbox/nullglob.err")
+status=$?
+assert_equal 'a sourced invocation exits successfully' '0' "$status"
+assert_equal 'a sourced invocation preserves the caller nullglob setting' 'enabled' "$nullglob_state"
+assert_equal 'a sourced invocation keeps stderr clean' '' "$(<"$sandbox/nullglob.err")"
+
+noglob_titles=$(HOME="$sandbox/home" bash -c '
+	set -u
+	set -f
+	source "$1"
+	list_memory_titles "$2"
+' bash "$subject" "$sandbox/project" 2>"$sandbox/noglob.err")
+status=$?
+assert_equal 'the sourceable function works in Peter’s noglob shell' '0' "$status"
+assert_equal 'noglob mode retains the complete classified title sets' "$expected_titles" "$noglob_titles"
+assert_equal 'noglob mode keeps stderr clean' '' "$(<"$sandbox/noglob.err")"
+
+mkdir -p "$sandbox/invalid-home/MEMORIES"
+invalid_file="$sandbox/invalid-home/MEMORIES/Broken lesson.frontmatter.md"
+printf '%s\n' 'body without required frontmatter' > "$invalid_file"
+invalid_headers=$(HOME="$sandbox/invalid-home" "$subject" --headers "$sandbox/empty-project" 2>"$sandbox/invalid.err")
+status=$?
+assert_equal 'header mode propagates frontmatter validation failures' '1' "$status"
+assert_equal 'invalid frontmatter produces no header record' '' "$invalid_headers"
+assert_equal 'header mode preserves the validator diagnostic on stderr' \
+	"$invalid_file: frontmatter must begin on line 1 with ---" \
+	"$(<"$sandbox/invalid.err")"
+
+exit "$failures"

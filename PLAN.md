@@ -1,5 +1,11 @@
 # Plan
 
+- [x] Add a one-command, sourceable shared/project memory title and header
+  browser, then refresh Codex's materialized copy. Completed 2026-07-20 21:52
+  EDT with deterministic set classification, header-validation delegation,
+  no-glob/Git-less proofs, complete suite, and byte-identical installed copy.
+  Curiosity poke: it must work unchanged in Peter's no-glob interactive shell
+  and outside Git worktrees.
 - [x] Prove the memory migration preserves every retained Markdown body byte-for-byte, then repair its extra-blank-line defect. Completed 2026-07-20 09:35 EDT.
 - [x] Refresh Codex's materialized memories skill after the body-preservation repair, retaining a recoverable prior copy. Completed 2026-07-20 09:41 EDT.
 - [x] Add the shared memory-frontmatter skill and its mechanically checked metadata contract. Completed 2026-07-20 09:33 EDT.

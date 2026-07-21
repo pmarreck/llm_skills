@@ -41,13 +41,23 @@ tags: [memory, memories, metadata, frontmatter]
 
 ## Recall and validation
 
-List filenames first. For metadata-only selection, inspect headers without
-loading bodies:
+List both the shared and current-project indexes in one deterministic,
+scope-labeled pass. The default reads filenames only; pass a project root when
+the working directory is not the project you mean:
 
 ```bash
-memories/scripts/check-frontmatter --headers ~/MEMORIES
-memories/scripts/check-frontmatter --headers ~/Code/PROJECT/MEMORIES
+memories/scripts/list-titles
+memories/scripts/list-titles ~/Code/PROJECT
 ```
+
+For metadata-only selection, add `--headers`; this delegates to the frontmatter
+validator and still does not load bodies:
+
+```bash
+memories/scripts/list-titles --headers ~/Code/PROJECT
+```
+
+The helper is also sourceable as the Bash function `list_memory_titles`.
 
 Read a body only after its filename or frontmatter makes it relevant. Validate
 every affected root after an edit or migration:

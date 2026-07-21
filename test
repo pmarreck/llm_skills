@@ -47,4 +47,11 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_memory_titles"; then
+	printf 'PASS: memory title browser integration\n'
+else
+	printf 'FAIL: memory title browser integration\n' >&2
+	failures=$((failures + 1))
+fi
+
 exit "$failures"

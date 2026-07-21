@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+
+# Browse shared and project memory indexes without loading lesson bodies.
+
+set -u
+
+memory_titles_usage() {
+	printf '%s\n' 'Usage: list-titles [--headers] [PROJECT_ROOT]'
+	printf '%s\n' 'List scope-classified memory filenames, or validated frontmatter headers.'
+}
+
+memory_titles_emit_names() {
+	local scope="$1" root="$2" path
+
+	[ -d "$root" ] || return 0
+	{
+		while IFS= read -r path; do
+			printf '%s\t%s\n' "$scope" "${path##*/}"
+		done < <(find "$root/." ! -name . -prune -type f -print)
+	} | LC_ALL=C sort
+}
+
+memory_titles_emit_headers() {
+	local scope="$1" root="$2" checker="$3"
+	local output status file description datetime tags
+
+	[ -d "$root" ] || return 0
+	output=$("$checker" --headers "$root")
+	status=$?
+	[ "$status" -eq 0 ] || return "$status"
+	[ -n "$output" ] || return 0
+
+	while IFS=$'\t' read -r file description datetime tags; do
+		printf '%s\t%s\t%s\t%s\t%s\n' \
+			"$scope" "${file##*/}" "$description" "$datetime" "$tags"
+	done < <(printf '%s\n' "$output" | LC_ALL=C sort)
+}
+
+# list_memory_titles unifies the global and current-project recall indexes while
+# keeping the default scan strictly filename-only; --headers reuses validation.
+list_memory_titles() {
+	local mode=names project_root='' shared_root project_memory_root
+	local script_dir checker status=0
+
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+			--headers)
+				mode=headers
+				;;
+			-h|--help)
+				memory_titles_usage
+				return 0
+				;;
+			-*)
+				printf 'list-titles: unknown option: %s\n' "$1" >&2
+				memory_titles_usage >&2
+				return 64
+				;;
+			*)
+				if [ -n "$project_root" ]; then
+					printf '%s\n' 'list-titles: expected at most one PROJECT_ROOT' >&2
+					memory_titles_usage >&2
+					return 64
+				fi
+				project_root="$1"
+				;;
+		esac
+		shift
+	done
+
+	if [ -z "${HOME:-}" ]; then
+		printf '%s\n' 'list-titles: HOME is not set' >&2
+		return 64
+	fi
+	if [ -z "$project_root" ]; then
+		project_root=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)
+		status=$?
+		if [ "$status" -ne 0 ] || [ -z "$project_root" ]; then
+			project_root="$PWD"
+		fi
+		status=0
+	fi
+
+	shared_root="$HOME/MEMORIES"
+	project_memory_root="${project_root%/}/MEMORIES"
+	script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+	checker="$script_dir/check-frontmatter"
+
+	if [ "$mode" = headers ]; then
+		memory_titles_emit_headers shared "$shared_root" "$checker" || status=$((status + $?))
+		if [ "$project_memory_root" != "$shared_root" ]; then
+			memory_titles_emit_headers project "$project_memory_root" "$checker" || status=$((status + $?))
+		fi
+	else
+		memory_titles_emit_names shared "$shared_root"
+		if [ "$project_memory_root" != "$shared_root" ]; then
+			memory_titles_emit_names project "$project_memory_root"
+		fi
+	fi
+
+	return "$status"
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+	list_memory_titles "$@"
+	exit $?
+fi
