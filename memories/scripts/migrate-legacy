@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Migrate durable lessons to Peter's frontmatter contract. Run --dry-run first.
+# Migrate durable lessons to the frontmatter contract. Run --dry-run first.
 
 set -u
 set -f
@@ -138,19 +138,14 @@ creation_epoch() {
 	printf '%s\n' "$epoch"
 }
 
-eastern_datetime() {
-	local epoch="$1" stamp date_part remainder offset zone
-	if stamp=$(TZ=America/New_York date -d "@$epoch" '+%Y-%m-%dT%H:%M:%S %z %Z' 2>/dev/null); then
+utc_datetime() {
+	local epoch="$1" stamp
+	if stamp=$(TZ=UTC0 date -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null); then
 		:
 	else
-		stamp=$(TZ=America/New_York date -r "$epoch" '+%Y-%m-%dT%H:%M:%S %z %Z')
+		stamp=$(TZ=UTC0 date -r "$epoch" '+%Y-%m-%dT%H:%M:%SZ')
 	fi
-	date_part=${stamp%% *}
-	remainder=${stamp#* }
-	offset=${remainder%% *}
-	zone=${remainder#* }
-	offset=$(printf '%s\n' "$offset" | sed -E 's/^([+-][0-9][0-9])([0-9][0-9])$/\1:\2/')
-	printf '%s%s # America/New_York (%s)\n' "$date_part" "$offset" "$zone"
+	printf '%s\n' "$stamp"
 }
 
 escape_yaml_string() {
@@ -189,7 +184,7 @@ migrate_file() {
 			return
 			;;
 	esac
-	datetime=$(eastern_datetime "$epoch")
+	datetime=$(utc_datetime "$epoch")
 
 	if [ "$mode" = dry-run ]; then
 		printf 'MIGRATE %s -> %s\n' "$file" "$target"

@@ -47,19 +47,19 @@ mkdir -p "$sandbox/home/MEMORIES" "$sandbox/project/MEMORIES"
 write_memory \
 	"$sandbox/home/MEMORIES/Zebra lesson.frontmatter.md" \
 	'Last shared title sorts last.' \
-	'2026-07-19T10:00:00-04:00 # America/New_York (EDT)' \
+	'2026-07-19T14:00:00Z' \
 	'memory, shared' \
 	'SHARED BODY MUST NOT APPEAR'
 write_memory \
 	"$sandbox/home/MEMORIES/Alpha lesson.frontmatter.md" \
 	'First shared title sorts first.' \
-	'2026-07-18T09:00:00-04:00 # America/New_York (EDT)' \
+	'2026-07-18T13:00:00Z' \
 	'memory, shared' \
 	'another hidden body'
 write_memory \
 	"$sandbox/project/MEMORIES/Project lesson.frontmatter.md" \
 	'Project-only title.' \
-	'2026-07-20T11:00:00-04:00 # America/New_York (EDT)' \
+	'2026-07-20T15:00:00Z' \
 	'memory, project' \
 	'PROJECT BODY MUST NOT APPEAR'
 mkdir -p "$sandbox/project/MEMORIES/not-a-memory-file"
@@ -78,9 +78,9 @@ headers=$(HOME="$sandbox/home" "$subject" --headers "$sandbox/project" 2>"$sandb
 status=$?
 assert_equal 'header listing exits successfully' '0' "$status"
 expected_headers=$(printf '%s\n' \
-	$'shared\tAlpha lesson.frontmatter.md\t"First shared title sorts first."\t2026-07-18T09:00:00-04:00 # America/New_York (EDT)\t[memory, shared]' \
-	$'shared\tZebra lesson.frontmatter.md\t"Last shared title sorts last."\t2026-07-19T10:00:00-04:00 # America/New_York (EDT)\t[memory, shared]' \
-	$'project\tProject lesson.frontmatter.md\t"Project-only title."\t2026-07-20T11:00:00-04:00 # America/New_York (EDT)\t[memory, project]')
+	$'shared\tAlpha lesson.frontmatter.md\t"First shared title sorts first."\t2026-07-18T13:00:00Z\t[memory, shared]' \
+	$'shared\tZebra lesson.frontmatter.md\t"Last shared title sorts last."\t2026-07-19T14:00:00Z\t[memory, shared]' \
+	$'project\tProject lesson.frontmatter.md\t"Project-only title."\t2026-07-20T15:00:00Z\t[memory, project]')
 assert_equal 'header listing preserves validated metadata and replaces paths with scopes' "$expected_headers" "$headers"
 assert_equal 'header listing keeps stderr clean' '' "$(<"$sandbox/headers.err")"
 
@@ -134,7 +134,7 @@ noglob_titles=$(HOME="$sandbox/home" bash -c '
 	list_memory_titles "$2"
 ' bash "$subject" "$sandbox/project" 2>"$sandbox/noglob.err")
 status=$?
-assert_equal 'the sourceable function works in Peter’s noglob shell' '0' "$status"
+assert_equal 'the sourceable function works in a caller’s noglob shell' '0' "$status"
 assert_equal 'noglob mode retains the complete classified title sets' "$expected_titles" "$noglob_titles"
 assert_equal 'noglob mode keeps stderr clean' '' "$(<"$sandbox/noglob.err")"
 

@@ -1,14 +1,14 @@
 ---
 name: memories
-description: Curate, retrieve, migrate, validate, consolidate, or promote Peter's durable shared and project memory lessons. Use whenever work involves ~/MEMORIES, any project MEMORIES/ root, memory frontmatter, weekly consolidation, cross-project lesson promotion, or metadata-only memory search.
+description: Curate, retrieve, migrate, validate, consolidate, or promote durable shared and project memory lessons. Use whenever work involves a shared memory root, a project MEMORIES/ root, memory frontmatter, consolidation, cross-project lesson promotion, or metadata-only recall.
 ---
 
 # Memory stewardship
 
 Treat memory roots as a small, curated recall index—not a journal. Shared
-lessons live in `~/MEMORIES/`; project-only lessons live in
-`<project-root>/MEMORIES/`. Never read or write another project’s memories
-unless Peter has placed that project in scope.
+lessons live in `$HOME/MEMORIES/`; project-only lessons live in
+`<project-root>/MEMORIES/`. Never read or write a project’s memories unless
+that project is explicitly within the current task scope.
 
 ## Required format
 
@@ -23,15 +23,19 @@ It starts with exactly these three YAML fields, then a closing `---`:
 ```markdown
 ---
 description: "One searchable sentence stating the durable lesson."
-datetime: 2026-07-20T09:00:00-04:00 # America/New_York (EDT)
+datetime: 2026-07-20T13:00:00Z
 tags: [memory, memories, metadata, frontmatter]
 ---
 ```
 
-- Use an ISO 8601 datetime with numeric offset. For Peter’s memories, add the
-  `America/New_York` comment and use the actual `EST` or `EDT` abbreviation.
-- Preserve a legacy file’s creation datetime when migrating it; use current
-  Eastern time only for genuinely new lessons.
+- Store datetimes as timezone-aware ISO 8601. Default to UTC (`Z`) for new and
+  migrated records; honor a different timezone-aware convention only when
+  local instructions explicitly require one.
+- Keep recalled metadata unchanged and deterministic. Convert timestamps to a
+  reader's local timezone only as an explicit presentation step, never as a
+  silent read-time rewrite.
+- Preserve a legacy file’s creation instant when migrating it; use the current
+  instant only for genuinely new lessons.
 - Write a concise, specific description. Tags are lowercase hyphenated terms.
   Include the canonical term and useful lexical aliases (`nix`, `nixos`,
   `flakes`; `wasm`, `webassembly`; `i18n`, `l10n`, `localization`). Prefer
@@ -63,7 +67,7 @@ Read a body only after its filename or frontmatter makes it relevant. Validate
 every affected root after an edit or migration:
 
 ```bash
-memories/scripts/check-frontmatter ~/MEMORIES ~/Code/PROJECT/MEMORIES
+memories/scripts/check-frontmatter "$HOME/MEMORIES" ~/Code/PROJECT/MEMORIES
 ```
 
 The checker rejects old filenames, missing fields, `date` in place of
@@ -73,9 +77,9 @@ For a reviewed legacy migration, create a recoverable backup, inspect the
 metadata-only preview, then apply and re-check:
 
 ```bash
-memories/scripts/migrate-legacy --dry-run ~/MEMORIES
-memories/scripts/migrate-legacy --apply ~/MEMORIES
-memories/scripts/check-frontmatter ~/MEMORIES
+memories/scripts/migrate-legacy --dry-run "$HOME/MEMORIES"
+memories/scripts/migrate-legacy --apply "$HOME/MEMORIES"
+memories/scripts/check-frontmatter "$HOME/MEMORIES"
 ```
 
 ## Write and consolidate

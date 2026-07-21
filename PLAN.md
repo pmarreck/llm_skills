@@ -1,5 +1,19 @@
 # Plan
 
+- [x] Depersonalize the public `memories` skill while preserving local owner
+  conventions as ordinary shared memories.
+  - [x] Reject names, handles, locations, and owner-specific timezones across
+    the skill and its integration tests.
+  - [x] Make legacy migration emit portable timezone-aware UTC metadata by
+    default while continuing to preserve retained Markdown bodies exactly.
+  - [x] Refresh the installed Codex copy and run the complete suite without
+    involving Mechatron Prime.
+  - Curiosity poke: can a local memory override a generic default without
+    turning the public skill back into a hidden per-user policy bundle?
+  Completed 2026-07-21 10:16 EDT. The public default is UTC, raw recall remains
+  lossless, and owner-specific Eastern-time behavior now lives only in a
+  private shared memory override.
+
 - [x] Add a one-command, sourceable shared/project memory title and header
   browser, then refresh Codex's materialized copy. Completed 2026-07-20 21:52
   EDT with deterministic set classification, header-validation delegation,

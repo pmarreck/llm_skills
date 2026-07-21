@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Validate Peter's memory-frontmatter contract without reading Markdown bodies.
+# Validate the memory-frontmatter contract without reading Markdown bodies.
 
 set -u
 
