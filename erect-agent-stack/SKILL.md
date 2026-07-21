@@ -44,8 +44,10 @@ Callers branch on this: only `created`/`joined-launched` need a kickoff;
 1. **Write the inbox kickoff note BEFORE erecting** (`<project>/inbox/…` per
    LLMsend), then erect with `--ping "📬 New inbox message from <you>: <path> — …"`.
    The tool waits for the agent to boot before delivering the ping.
-2. Launch default is resume-then-fresh-fallback (`--resume <name>`); use
-   `--fresh` when a clean context matters (most kickoffs).
+2. Launch default continues the most recent conversation in the project
+   directory (`claude --continue`; `codex resume --last`), then falls back to a
+   fresh session if continuation cannot boot. Use `--fresh` when a clean
+   context matters (most kickoffs).
 3. The keystroke lore is encoded in the tool: plain `Enter` launches commands
    in shells; Claude uses kitty CSI u (`$'\e[13u'`) for a running-agent submit;
    Codex uses tmux bracketed paste followed by plain `Enter` so its paste-burst
