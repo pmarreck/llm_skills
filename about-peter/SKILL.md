@@ -1,1 +1,1 @@
-../../peter_ai_context/PETER.md
+../../llm-skills-private/about-peter/SKILL.md
