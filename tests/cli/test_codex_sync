@@ -34,10 +34,14 @@ assert_contains() {
 }
 
 cp -pRP "$ROOT/." "$repo"
-# The shared repository deliberately links this skill to Peter's private
-# context outside the repository. Materialize it only in the RAM test fixture.
-rm "$repo/about-peter/SKILL.md"
-cp -pL "$ROOT/about-peter/SKILL.md" "$repo/about-peter/SKILL.md"
+# Some skills (e.g. about-peter) symlink SKILL.md to private content kept
+# outside this shared repo; that target is absent in this RAM fixture, so the
+# copied symlink dangles. Add an explicit synthetic dangling skill too, so the
+# "skip the unmaterializable skill, don't abort the whole sync" behavior is
+# proven mechanically and stays true even if the real skill that motivated it
+# is later moved or removed.
+mkdir -p "$repo/zz-unavailable-skill"
+ln -s ./this-target-does-not-exist "$repo/zz-unavailable-skill/SKILL.md"
 
 out='' err='' rc=0
 capture bash -c 'HOME="$1" "$2/install" --codex --sync' _ "$home" "$repo"
@@ -46,6 +50,15 @@ if [ "$rc" -ne 0 ]; then
 else
 	assert_contains 'Codex sync is noninteractive' 'Mode: sync (noninteractive)' "$out"
 	assert_contains 'Codex sync announces hook installation' 'hooks live at' "$out"
+fi
+
+# A skill whose source cannot be materialized (dangling/external symlink) must
+# be skipped with a warning and must not abort the sync or install itself.
+assert_contains 'Codex sync warns about an unmaterializable skill' 'zz-unavailable-skill' "$err"
+if [ -e "$home/.codex/skills/zz-unavailable-skill" ]; then
+	fail 'unmaterializable skill must not be installed'
+else
+	pass 'unmaterializable skill is not installed'
 fi
 
 hook_path="$repo/.githooks/post-checkout"

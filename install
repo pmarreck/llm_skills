@@ -88,6 +88,12 @@ install_missing_codex_skills() {
         name=${skill_dir##*/}
         dest="$target/$name"
 
+        if [ ! -e "$skill_dir/SKILL.md" ]; then
+            printf 'Skipped unavailable skill (source could not be materialized): %s\n' "$name" >&2
+            skipped=$((skipped + 1))
+            continue
+        fi
+
         if [ -e "$dest" ] || [ -L "$dest" ]; then
             printf 'Skipped existing skill: %s\n' "$name"
             skipped=$((skipped + 1))
@@ -124,7 +130,7 @@ sync_codex_skills() {
 	local backup_parent="$HOME/.codex/backups"
 	local backup_root=''
 	local skill_dir name dest staging staged diff_rc
-	local installed=0 refreshed=0 unchanged=0 failed=0
+	local installed=0 refreshed=0 unchanged=0 skipped=0 failed=0
 
 	mkdir -p "$target"
 	printf '\n'
@@ -137,6 +143,12 @@ sync_codex_skills() {
 	while IFS= read -r skill_dir; do
 		name=${skill_dir##*/}
 		dest="$target/$name"
+
+		if [ ! -e "$skill_dir/SKILL.md" ]; then
+			printf 'Skipped unavailable skill (source could not be materialized): %s\n' "$name" >&2
+			skipped=$((skipped + 1))
+			continue
+		fi
 
 		if [ -e "$dest" ] || [ -L "$dest" ]; then
 			if diff -qr "$skill_dir" "$dest" >/dev/null 2>&1; then
@@ -202,7 +214,7 @@ sync_codex_skills() {
 		fi
 	done < <(list_skill_dirs)
 
-	printf '\nSummary: installed=%d refreshed=%d unchanged=%d failed=%d\n' "$installed" "$refreshed" "$unchanged" "$failed"
+	printf '\nSummary: installed=%d refreshed=%d unchanged=%d skipped=%d failed=%d\n' "$installed" "$refreshed" "$unchanged" "$skipped" "$failed"
 	if [ -n "$backup_root" ]; then
 		printf 'Recoverable previous copies: %s\n' "$backup_root"
 	fi
