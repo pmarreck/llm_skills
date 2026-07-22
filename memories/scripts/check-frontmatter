@@ -30,6 +30,14 @@ check_file() {
 	local description_count=0 datetime_count=0 tags_count=0 value tag_contents
 
 	base=${file##*/}
+	# Skip VCS scaffolding that legitimately lives in a synced (Git) memory
+	# root: hidden files (.gitignore, .gitattributes, .DS_Store) and common
+	# repository docs. Genuine memories and legacy noise are neither hidden nor
+	# in this allowlist, so they are still validated or flagged below.
+	case "$base" in
+		.*) return ;;
+		README.md|LICENSE|LICENSE.md|LICENSE.txt|COPYING) return ;;
+	esac
 	case "$base" in
 		*.frontmatter.md) ;;
 		*)
@@ -119,7 +127,7 @@ check_path() {
 		while IFS= read -r file; do
 			[ -n "$file" ] || continue
 			check_file "$file"
-		done < <(find "$path" -type f -print)
+		done < <(find "$path" -type d -name .git -prune -o -type f -print)
 	else
 		report_failure "$path" 'does not exist or is not a regular file or directory'
 	fi

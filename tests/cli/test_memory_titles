@@ -64,6 +64,14 @@ write_memory \
 	'PROJECT BODY MUST NOT APPEAR'
 mkdir -p "$sandbox/project/MEMORIES/not-a-memory-file"
 
+# A synced memory root is a Git repository. Its VCS scaffolding must never be
+# listed or classified as a memory title, in either names or headers mode.
+mkdir -p "$sandbox/home/MEMORIES/.git/hooks"
+printf '%s\n' 'ref: refs/heads/yolo' > "$sandbox/home/MEMORIES/.git/HEAD"
+printf '%s\n' '#!/bin/sh' > "$sandbox/home/MEMORIES/.git/hooks/pre-commit.sample"
+printf '%s\n' '# Memory root' > "$sandbox/home/MEMORIES/README.md"
+printf '%s\n' '.DS_Store' > "$sandbox/home/MEMORIES/.gitignore"
+
 titles=$(HOME="$sandbox/home" "$subject" "$sandbox/project" 2>"$sandbox/titles.err")
 status=$?
 assert_equal 'title listing exits successfully' '0' "$status"

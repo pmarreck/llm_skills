@@ -10,6 +10,13 @@ lessons live in `$HOME/MEMORIES/`; project-only lessons live in
 `<project-root>/MEMORIES/`. Never read or write a project’s memories unless
 that project is explicitly within the current task scope.
 
+A project's `MEMORIES/` is committed inside that project's own repository and
+may become public, so **never put personal or private information** — real
+names, contacts, credentials, secrets, health, finances, or other private
+circumstances — in a project-scoped memory. Keep such context only in the
+private shared root (`$HOME/MEMORIES/`) or a dedicated private context pack.
+Project memories hold only the durable technical lesson.
+
 ## Required format
 
 Every memory is a regular Markdown file named:

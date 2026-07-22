@@ -26,6 +26,12 @@ else
 	fail 'shared memories skill exists'
 fi
 
+if rg -qi 'never put personal or private information' "$ROOT/memories/SKILL.md"; then
+	pass 'skill forbids personal information in project-scoped memories'
+else
+	fail 'skill forbids personal information in project-scoped memories'
+fi
+
 name_token='Pe'"ter"
 handle_token='pmar'"reck"
 zone_token='America/New'"_York"
@@ -127,6 +133,39 @@ if TZ=UTC0 "$MIGRATOR" --apply "$legacy_root" >"$sandbox/migrate-apply.out" 2>"$
 	pass 'migrator creates a checked frontmatter memory'
 else
 	fail 'migrator creates a checked frontmatter memory without altering its body'
+fi
+
+# A synced memory root is a Git repository: the checker must ignore VCS
+# scaffolding (.git/ and its non-hidden hook files, README.md, .gitignore)
+# while still flagging genuine legacy noise like MEMORIES.md.
+git_root="$sandbox/gitrepo"
+mkdir -p "$git_root/.git/hooks"
+printf '%s\n' 'ref: refs/heads/yolo' > "$git_root/.git/HEAD"
+printf '%s\n' '#!/bin/sh' > "$git_root/.git/hooks/pre-commit.sample"
+printf '%s\n' '# Memory root' > "$git_root/README.md"
+printf '%s\n' '.DS_Store' > "$git_root/.gitignore"
+printf '%s\n' \
+	'---' \
+	'description: "Repo-hosted memory validates cleanly."' \
+	'datetime: 2026-07-20T13:00:00Z' \
+	'tags: [memory]' \
+	'---' \
+	> "$git_root/repo.frontmatter.md"
+
+if "$CHECKER" "$git_root" >"$sandbox/git.out" 2>"$sandbox/git.err"; then
+	pass 'checker ignores git-repo scaffolding in a memory root'
+else
+	fail 'checker ignores git-repo scaffolding in a memory root'
+	cat "$sandbox/git.err" >&2
+fi
+
+printf '%s\n' 'legacy noise' > "$git_root/MEMORIES.md"
+if "$CHECKER" "$git_root" >"$sandbox/git-legacy.out" 2>"$sandbox/git-legacy.err"; then
+	fail 'checker still flags legacy MEMORIES.md alongside scaffolding'
+elif rg -q 'must end in .frontmatter.md' "$sandbox/git-legacy.err"; then
+	pass 'checker flags legacy noise but skips scaffolding in a git repo'
+else
+	fail 'checker flags legacy noise but skips scaffolding in a git repo'
 fi
 
 exit "$failures"

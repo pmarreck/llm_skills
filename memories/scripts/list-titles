@@ -10,12 +10,19 @@ memory_titles_usage() {
 }
 
 memory_titles_emit_names() {
-	local scope="$1" root="$2" path
+	local scope="$1" root="$2" path base
 
 	[ -d "$root" ] || return 0
 	{
 		while IFS= read -r path; do
-			printf '%s\t%s\n' "$scope" "${path##*/}"
+			base=${path##*/}
+			# Never surface VCS scaffolding of a synced (Git) memory root as a
+			# title: hidden files (.gitignore, .DS_Store) and repository docs.
+			case "$base" in
+				.*) continue ;;
+				README.md|LICENSE|LICENSE.md|LICENSE.txt|COPYING) continue ;;
+			esac
+			printf '%s\t%s\n' "$scope" "$base"
 		done < <(find "$root/." ! -name . -prune -type f -print)
 	} | LC_ALL=C sort
 }
