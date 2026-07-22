@@ -1,5 +1,17 @@
 # Plan
 
+- [x] Sync the global agent memory root across machines. Collect every
+  machine's `~/MEMORIES` (Mac 1 + thelio-nixos 37 + framework-nixos 0 — a
+  conflict-free union of 38), commit to a new private repo
+  (github.com/pmarreck/personal-memories, branch `yolo`) cloned **directly** as
+  `~/MEMORIES` on all three machines (old copies kept as `.bak`, verified no
+  memory lost by content-hash). Make the memories skill git-repo-aware — the
+  frontmatter checker and title lister prune `.git/` and skip repo scaffolding
+  (README/LICENSE/.gitignore) while still flagging legacy noise — and add a
+  stewardship rule forbidding personal/private info in project-scoped
+  (repo-committed, possibly public) memories. Completed 2026-07-21 20:20 EDT.
+  Curiosity poke: a synced memory root is now itself a git repo, so any tool
+  that walks it must be VCS-aware.
 - [x] Move the private `about-peter` context pack off the retired
   Documents-CloudManaged path into a new private `llm-skills-private` sibling
   repo (github.com/pmarreck/llm-skills-private, branch `yolo`) holding the whole
