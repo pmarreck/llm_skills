@@ -25,7 +25,7 @@ EOF
 }
 
 list_skill_dirs() {
-	find -L "$SCRIPT_DIR" -mindepth 2 -maxdepth 2 -name SKILL.md -exec dirname {} \; | sort -u
+	command find -L "$SCRIPT_DIR" -mindepth 2 -maxdepth 2 -name SKILL.md -exec dirname {} \; | sort -u
 }
 
 stage_skill() {

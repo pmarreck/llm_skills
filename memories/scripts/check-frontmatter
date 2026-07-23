@@ -127,7 +127,7 @@ check_path() {
 		while IFS= read -r file; do
 			[ -n "$file" ] || continue
 			check_file "$file"
-		done < <(find "$path" -type d -name .git -prune -o -type f -print)
+		done < <(command find "$path" -type d -name .git -prune -o -type f -print)
 	else
 		report_failure "$path" 'does not exist or is not a regular file or directory'
 	fi

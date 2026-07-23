@@ -1,5 +1,20 @@
 # Plan
 
+- [x] Add a cross-agent `capture-collaboration-evidence` skill that proactively
+  notices, evaluates, and records artifact-backed cases where Peter/agent
+  synthesis beats either starting approach.
+  - [x] Prove the installer distributes the skill and its Codex UI metadata.
+  - [x] Define broad implicit triggers plus a strict non-boosterish admission
+    threshold and global-memory append protocol.
+  - [x] Validate the skill, run the complete suite, refresh the installed Codex
+    copy, and independently forward-test recognition/rejection behavior.
+  - Curiosity poke: a trigger broad enough to catch unprompted cases can become
+    noisy; the admission test must reject mere agreement, praise, delegation,
+    and unilateral correction.
+  Completed 2026-07-23 16:06 EDT. Fresh-agent forward tests admitted the
+  host-scheduled Pause synthesis at accepted-design stage and rejected routine
+  exact-specification delegation. Implicit invocation is explicit and
+  regression-tested.
 - [x] Sync the global agent memory root across machines. Collect every
   machine's `~/MEMORIES` (Mac 1 + thelio-nixos 37 + framework-nixos 0 — a
   conflict-free union of 38), commit to a new private repo

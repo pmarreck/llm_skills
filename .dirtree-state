@@ -4,6 +4,7 @@ annotate=[
 	.githooks = Repository-local Git hooks refresh materialized Codex skills after checkout or merge.
 	MECHATRON_PRIME_CI.md = Portable Mechatron Prime CI target, webhook, and badge policy.
 	about-peter = Loads Peter's full personal context pack (career, finances, health, family, coaching) for person-level judgment.
+	capture-collaboration-evidence = Proactively identifies and records artifact-backed cases where human-agent synthesis beats either starting approach.
 	deep-code-review = Audit a codebase or major subsystem for quality and missed issues at project milestones.
 	dispatch = Dispatch background subagents for substantial tasks, fanning out parallel work with progress checkpointing.
 	erect-agent-stack = Stand up or join a project's agent stack — tmux session + remoted coding agent — in one idempotent command.

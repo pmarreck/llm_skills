@@ -23,7 +23,7 @@ memory_titles_emit_names() {
 				README.md|LICENSE|LICENSE.md|LICENSE.txt|COPYING) continue ;;
 			esac
 			printf '%s\t%s\n' "$scope" "$base"
-		done < <(find "$root/." ! -name . -prune -type f -print)
+		done < <(command find "$root/." ! -name . -prune -type f -print)
 	} | LC_ALL=C sort
 }
 

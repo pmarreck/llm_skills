@@ -226,7 +226,7 @@ migrate_path() {
 		while IFS= read -r file; do
 			[ -n "$file" ] || continue
 			migrate_file "$file"
-		done < <(find "$path" -type f -print)
+		done < <(command find "$path" -type f -print)
 	else
 		report_failure "$path" 'does not exist or is not a regular file or directory'
 	fi

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Capture Collaboration Evidence"
+  short_description: "Notice and preserve exceptional human-agent synthesis"
+  default_prompt: "Use $capture-collaboration-evidence to evaluate this interaction and record it only if the evidence threshold is met."
+
+policy:
+  allow_implicit_invocation: true

@@ -49,7 +49,11 @@ fi
 
 home="$sandbox/home"
 out='' err='' rc=0
-capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"
+capture bash -c '
+	find() { "$HOME/bin/find" "$@"; }
+	export -f find
+	printf "yes\\n" | HOME="$1" "$2/install" --codex
+' _ "$home" "$ROOT"
 if [ "$rc" -ne 0 ]; then
 	fail "Codex install exited $rc: $err"
 else
@@ -69,6 +73,19 @@ if [ -f "$home/.codex/skills/mechatron-ci/SKILL.md" ] && [ -f "$home/.codex/skil
 	pass 'Codex install includes the shared Mechatron skill'
 else
 	fail 'Codex install includes the shared Mechatron skill'
+fi
+
+if [ -f "$home/.codex/skills/capture-collaboration-evidence/SKILL.md" ] &&
+	[ -f "$home/.codex/skills/capture-collaboration-evidence/agents/openai.yaml" ]; then
+	pass 'Codex install includes the collaboration-evidence skill and UI metadata'
+else
+	fail 'Codex install includes the collaboration-evidence skill and UI metadata'
+fi
+if grep -Fq 'allow_implicit_invocation: true' \
+	"$home/.codex/skills/capture-collaboration-evidence/agents/openai.yaml"; then
+	pass 'collaboration-evidence skill explicitly permits implicit invocation'
+else
+	fail 'collaboration-evidence skill explicitly permits implicit invocation'
 fi
 
 out='' err='' rc=0

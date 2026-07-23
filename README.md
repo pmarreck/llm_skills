@@ -80,6 +80,7 @@ for the full mechanism.
 | Skill | Trigger |
 |---|---|
 | [`deep-code-review`](deep-code-review/SKILL.md) | Auditing a codebase or major subsystem for quality + missed issues |
+| [`capture-collaboration-evidence`](capture-collaboration-evidence/SKILL.md) | Proactively preserving artifact-backed cases of exceptional human-agent synthesis |
 | [`dispatch`](dispatch/SKILL.md) | Dispatching background subagents for substantial parallel work with checkpointing |
 | [`handoff`](handoff/SKILL.md) | Writing a session handoff document so a fresh agent can pick up the work with full purpose + intent |
 | [`i18n`](i18n/SKILL.md) | Any user-facing UI work involving translations, locales, `--lang`, RTL, or bilingual errors |
