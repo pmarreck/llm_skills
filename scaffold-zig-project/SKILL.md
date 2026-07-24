@@ -7,7 +7,10 @@ description: Use when starting a new Zig project from scratch — "new project",
 
 ## Overview
 
-Generate the complete boilerplate for a new Zig project following Peter's hexagonal architecture pattern: pure Zig core (no I/O), C FFI boundary, C CLI consumer. Includes Nix flake with Garnix CI, build.zig, build.zig.zon, PLAN.md, and .gitignore.
+Generate the complete boilerplate for a new Zig project following Peter's
+hexagonal architecture pattern: pure Zig core (no I/O), C FFI boundary, C CLI
+consumer. Includes a Nix flake prepared for Mechatron Prime CI, build.zig,
+build.zig.zon, PLAN.md, and .gitignore.
 
 <important>
 The user already has `setup_zig_repo` in their shell which handles: jj/git init, AGENTS.md/CLAUDE.md links, jj cheatsheet, Zig guide, commit hooks, and some .gitignore entries. This skill covers everything that alias does NOT: flake.nix, build.zig, build.zig.zon, directory structure, PLAN.md, and remaining .gitignore entries.
@@ -92,7 +95,9 @@ gh repo create pmarreck/PROJECT_NAME --public --source=. --push
 ```
 
 <remember>
-Garnix is installed org-wide -- no per-repo config needed. It auto-evaluates `packages` and `checks` from `flake.nix`.
+Invoke `$mechatron-ci` after the flake outputs are real and locally verified.
+That skill owns `.mechatron-prime/targets`, webhook provisioning, the dynamic
+README badge, and live verification; do not reproduce those details here.
 </remember>
 
 ---
@@ -443,6 +448,8 @@ int main(int argc, char* argv[]) {
 - **Forgetting `export HOME=$TMPDIR`** in flake.nix buildPhase -- Zig needs a writable HOME
 - **Missing `dontConfigure = true`** -- Nix tries to run `./configure` otherwise
 - **Using `main` branch** -- Peter's projects always use `yolo`
-- **Skipping Garnix checks** -- Always include `checks` in flake.nix; Garnix auto-detects them
+- **Omitting CI targets** -- Always include intentional `checks` in `flake.nix`,
+  then use `$mechatron-ci` to select real attributes in
+  `.mechatron-prime/targets`
 - **Importing Zig core directly from a Zig CLI** -- The CLI MUST call through the C FFI to dogfood the boundary, even when both are Zig
 </important>

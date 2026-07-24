@@ -118,8 +118,10 @@ test "scaling: referenceScan stays linear" {
 - **Honest residuals:** if a rare/secondary path is still super-linear but you're not
   fixing it now, make the gate **report-only** for that phase and track it — do NOT
   let it gate green falsely (same discipline as a fence ledger).
-- **Wire it in:** `./bm` runs it locally; add a flake `checks.scaling` so Garnix runs
-  it in-sandbox (the ratio is machine-independent, so it passes there with no baseline).
+- **Wire it in:** `./bm` runs it locally; add a flake `checks.scaling`, then use
+  the `$mechatron-ci` skill to include that exact attribute in
+  `.mechatron-prime/targets` so it runs in-sandbox (the ratio is
+  machine-independent, so it passes there with no baseline).
 
 Microbenchmarks live alongside unit tests in `src/lib.zig` (or wherever tests live). They are fast (target <500ms each), run on every `zig build test`, and **fail** if performance drifts outside the window.
 

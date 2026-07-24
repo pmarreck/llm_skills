@@ -1,13 +1,14 @@
 ---
 name: ship
-description: Use when shipping work - commit/push and watch Garnix CI, set up CI/badges, or cut a tagged GitHub release. Triggers - "ship", "push", "check CI", "add CI", "release", "tag it".
+description: Use when shipping work - commit/push and watch Mechatron Prime CI, delegate CI setup/badges to the mechatron-ci skill, or cut a tagged GitHub release. Triggers - "ship", "push", "check CI", "add CI", "release", "tag it".
 ---
 
 # Ship
 
 ## Overview
 
-Commit (if needed), push, and watch Garnix CI until green. On failure, investigate and fix automatically.
+Commit (if needed), push, and watch Mechatron Prime CI until green. On failure,
+investigate and fix automatically.
 
 > **SCM is direct `git`.** The main branch is `yolo`. Keep commits focused,
 > never force-push unless Peter explicitly requests it, and independently verify
@@ -40,9 +41,9 @@ digraph ship {
   "Unpushed commits?" -> "Push yolo" [label="yes"];
   "Unpushed commits?" -> "Already pushed, check CI" [label="no"];
   "Push yolo" -> "Verify origin/yolo";
-  "Verify origin/yolo" -> "Get run ID";
-  "Already pushed, check CI" -> "Get run ID";
-  "Get run ID" -> "Watch CI in background";
+  "Verify origin/yolo" -> "Find exact commit in CI";
+  "Already pushed, check CI" -> "Find exact commit in CI";
+  "Find exact commit in CI" -> "Watch CI in background";
   "Watch CI in background" -> "CI passed?" [label="wait"];
   "CI passed?" -> "Report green" [label="yes"];
   "CI passed?" -> "Investigate failure" [label="no"];
@@ -102,23 +103,27 @@ If the push is rejected because the remote advanced, fetch and inspect the new
 commits. Integrate them without rewriting published history, rerun tests, and
 push again.
 
-### Step 3: Get the CI Run
+### Step 3: Find the Exact Commit in CI
 
-Wait a few seconds after push, then:
+Use the operator CLI to inspect the worker and recent results:
 
 ```bash
-gh run list --limit 5
+mechatron-ci status
+mechatron-ci log --limit 50
 ```
 
-Find the most recent run triggered by the push. Get its ID.
+Match the repository and exact pushed commit. Do not mistake another repository's
+single-queue build for this shipment.
 
 ### Step 4: Watch CI in Background
 
 ```bash
-gh run watch <run-id>
+mechatron-ci status
+mechatron-ci log --limit 50
 ```
 
-Run this as a background task. Report the result when it completes.
+Poll without blocking Peter's terminal. Report the result when that exact commit
+completes.
 
 ### Step 5: Handle Result
 
@@ -126,7 +131,8 @@ Run this as a background task. Report the result when it completes.
 
 **If red:** Do NOT just report the failure. Investigate:
 
-1. `gh run view <run-id> --log-failed` to see what failed
+1. Use `mechatron-ci log --limit 100` and the project's local build/test
+   commands to reproduce what failed
 2. Diagnose the root cause
 3. Fix it
 4. Loop back to Step 1 (commit, push, watch again)
@@ -203,47 +209,14 @@ gh release create "$TAG" --target yolo \
 
 If the repo is missing CI infrastructure, set it up before the first ship. Check for these and create any that are missing:
 
-### Garnix
+### Mechatron Prime
 
 <remember>
-Garnix is installed org-wide as a GitHub App — no per-repo config needed. It auto-evaluates `packages.*` and `checks.*` from `flake.nix`. Do NOT create a `garnix.yaml` unless you need to restrict what gets built.
+Invoke the `$mechatron-ci` skill. It is the single source of truth for the
+exact-commit `.mechatron-prime/targets` manifest, webhook provisioning, dynamic
+README badge, and live verification. Do not duplicate its commands or badge
+template here.
 </remember>
-
-### GitHub Actions
-
-Create `.github/workflows/ci.yml` if it doesn't exist:
-
-<template>
-```yaml
-name: CI
-
-on:
-  push:
-    branches: [yolo]
-  pull_request:
-    branches: [yolo]
-
-jobs:
-  build-and-test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
-      - name: Build
-        run: nix build
-
-      - name: Test
-        run: nix develop -c zig build test
-```
-</template>
-
-Adapt the test command to the project (not all projects use `zig build test`). The build step (`nix build`) should be universal for any Nix-based project.
 
 ### Target Platforms
 
@@ -261,51 +234,9 @@ For CLI-only projects and UI-less system-level libraries, target **5 platforms**
 - Windows uses `-gnu` (MinGW) for Zig cross-compilation compatibility.
 </important>
 
-Ensure the `flake.nix` exposes `packages.*` for all supported systems so Garnix can build them. For Zig cross-compilation, use `-Dtarget=` in the flake build phase and expose each as a separate flake output (e.g., `packages.x86_64-linux`, `packages.aarch64-windows`).
-
-**GitHub Actions cross-compile job** (add alongside the native build-and-test job):
-
-<template>
-```yaml
-  cross-compile:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target:
-          - aarch64-macos
-          - aarch64-linux
-          - x86_64-linux
-          - aarch64-windows
-          - x86_64-windows
-    steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-      - name: Cross-compile for ${{ matrix.target }}
-        run: nix build .#${{ matrix.target }}
-```
-</template>
-
-### Badges
-
-Add these to the top of the main `README.md`, right after the title line (`# project-name`):
-
-**Garnix badge** (branch-specific):
-```markdown
-[![Garnix](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fgarnix.io%2Fapi%2Fbadges%2FOWNER%2FREPO%3Fbranch%3DBRANCH)](https://garnix.io/repo/OWNER/REPO)
-```
-
-**GitHub Actions badge** (branch-specific):
-```markdown
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg?branch=BRANCH)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
-```
-
-Replace `OWNER`, `REPO`, and `BRANCH` (almost always `pmarreck`, the repo name, and `yolo`).
-
-<template>
-**Template for copy-paste** (fill in REPO):
-```markdown
-[![Garnix](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Fgarnix.io%2Fapi%2Fbadges%2Fpmarreck%2FREPO%3Fbranch%3Dyolo)](https://garnix.io/repo/pmarreck/REPO)
-[![CI](https://github.com/pmarreck/REPO/actions/workflows/ci.yml/badge.svg?branch=yolo)](https://github.com/pmarreck/REPO/actions/workflows/ci.yml)
-```
-</template>
+Ensure the `flake.nix` exposes intentional `packages.*` and `checks.*` outputs
+for supported systems. For Zig cross-compilation, use `-Dtarget=` in the flake
+build phase and expose each as a separate flake output (for example,
+`packages.x86_64-linux` and `packages.aarch64-windows`). Add the outputs that
+Mechatron should build to `.mechatron-prime/targets` by following
+`$mechatron-ci`; never guess attribute names.

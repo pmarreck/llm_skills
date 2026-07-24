@@ -61,4 +61,11 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_retired_garnix_guidance"; then
+	printf 'PASS: retired Garnix guidance stays retired\n'
+else
+	printf 'FAIL: retired Garnix guidance must point to Mechatron Prime\n' >&2
+	failures=$((failures + 1))
+fi
+
 exit "$failures"

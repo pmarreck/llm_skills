@@ -1,5 +1,13 @@
 # Plan
 
+- [x] Retire active Garnix recommendations from every shared skill and make
+  `$mechatron-ci` the single source of truth for CI setup, target manifests,
+  badges, and live verification.
+  - Curiosity poke: historical retirement context belongs in the migration
+    skill, but no general workflow should accidentally resurrect Garnix.
+  Completed 2026-07-24 12:52 EDT. A repository-level regression gate now
+  rejects stale references outside the migration skill; all three affected
+  workflows delegate to `$mechatron-ci` and name the exact-commit manifest.
 - [x] Add an explicit opt-in gate for introducing i18n to an existing
   non-localized project: ask Peter once, record enabled/deferred/declined in
   the project's `RULES.md`, and do not infer consent merely from touching

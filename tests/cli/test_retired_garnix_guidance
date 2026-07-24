@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+failures=0
+
+pass() {
+	printf 'ok - %s\n' "$1"
+}
+
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+mapfile -t stale_guidance < <(
+		cd "$ROOT" &&
+		rg -n -i 'garnix' --glob '*/SKILL.md' |
+		rg -v '^mechatron-ci/SKILL\.md:'
+)
+
+if [ "${#stale_guidance[@]}" -eq 0 ]; then
+	pass 'only the migration skill mentions retired Garnix'
+else
+	fail 'shared skills outside mechatron-ci still recommend or mention Garnix'
+	printf '  %s\n' "${stale_guidance[@]}" >&2
+fi
+
+for skill in ship scaffold-zig-project zig-microbenchmarks; do
+	if rg -q '\$mechatron-ci|`mechatron-ci` skill|Mechatron Prime CI skill' \
+		"$ROOT/$skill/SKILL.md"; then
+		pass "$skill delegates CI setup to mechatron-ci"
+	else
+		fail "$skill must delegate CI setup to mechatron-ci"
+	fi
+done
+
+for skill in scaffold-zig-project zig-microbenchmarks; do
+	if rg -q '\.mechatron-prime/targets' "$ROOT/$skill/SKILL.md"; then
+		pass "$skill names the exact-commit target manifest"
+	else
+		fail "$skill must name .mechatron-prime/targets"
+	fi
+done
+
+exit "$failures"

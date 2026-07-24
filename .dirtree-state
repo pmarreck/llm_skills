@@ -31,5 +31,6 @@ annotate=[
 	tests/cli/test_install = Regression tests for CLI installer options, copied Codex skills, and rerun safety.
 	tests/cli/test_memories = Regression-tests frontmatter validation, legacy migration, repository scaffolding, and .codescan pruning.
 	tests/cli/test_memory_titles = Classifies shared/project memory discovery and proves headers ignore VCS and .codescan metadata.
+	tests/cli/test_retired_garnix_guidance = Regression gate preventing shared workflows from resurrecting retired Garnix CI guidance.
 	zig-microbenchmarks = Add benchmarks to a Zig project, track hot-path performance, and investigate regressions.
 ]
