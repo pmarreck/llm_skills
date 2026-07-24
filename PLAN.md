@@ -1,5 +1,13 @@
 # Plan
 
+- [x] Add an explicit opt-in gate for introducing i18n to an existing
+  non-localized project: ask Peter once, record enabled/deferred/declined in
+  the project's `RULES.md`, and do not infer consent merely from touching
+  user-facing strings.
+  - Curiosity poke: the recorded decision must prevent repeated prompts while
+    remaining easy to revisit deliberately.
+  Completed 2026-07-24 12:20 EDT with a five-assertion policy regression test
+  and a recorded `declined` decision in the dotfiles repository.
 - [x] Make memory title/header discovery and frontmatter validation prune every `.codescan/` search-index directory, then refresh Codex's materialized copy — completed 2026-07-24 09:29 EDT.
   - Curiosity poke: generated hidden directories must be ignored without accidentally exempting ordinary hidden legacy files from validation.
 - [x] Add a cross-agent `capture-collaboration-evidence` skill that proactively

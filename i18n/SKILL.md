@@ -1,26 +1,47 @@
 ---
 name: i18n
-description: Use when starting or expanding any user-facing UI (CLI, TUI, web, GUI) where translations, locales, or multilingual support are mentioned, planned, or implied. Establishes a canonical 50-locale set, compile-time enforcement, bilingual-error rule, RTL handling, and --lang/--help translation conventions. Also use when reviewing existing UI for i18n readiness.
+description: Use when translations, locales, multilingual support, RTL, bilingual errors, or --lang behavior are mentioned, or when i18n has already been enabled for a CLI, TUI, web, or GUI project. Before introducing i18n to an existing non-localized project, obtain and record an explicit project-owner decision. Establishes the canonical 50-locale set and prepare/enforce discipline.
 ---
 
 # i18n — internationalization discipline for user-facing UI
 
-A consistent i18n discipline for any CLI/TUI/web/GUI project: every
-shipped tool should support every supported language fully, with
-missing translations failing the build rather than silently falling
-back to English.
+A consistent i18n discipline for CLI/TUI/web/GUI projects whose scope
+includes localization: every supported language must be supported
+fully, with missing translations failing the build rather than
+silently falling back to English.
 
 ## When to invoke
 
-- A new project has any user-facing strings (CLI help, prompts, error
-  messages, web UI labels, GUI menu items)
+- A new project explicitly includes localization in its intended scope
 - Existing project adds a new locale or expands UI
 - Code review surfaces a missing-translation fallback, an untranslated
   error string, or a hardcoded English message in user-facing code
 - A user asks "should this support languages?" / "is this localized?"
 
-If you're touching user-facing strings AT ALL, check this skill before
-deciding the framework.
+Touching user-facing strings alone is a reason to check the project's
+recorded scope decision, not permission to add i18n infrastructure.
+
+## Scope decision gate
+
+Before adding localization infrastructure to an existing project that has no
+i18n support, inspect the project root's `RULES.md` for an
+`Internationalization` decision.
+
+- If no decision is recorded, ask the project owner whether to introduce i18n
+  before changing code or tests.
+- Record the decision in the project root's `RULES.md` with one of three
+  statuses: `enabled`, `deferred`, or `declined`, plus the decision owner,
+  date/timezone, scope, and a short rationale. Create `RULES.md` if needed.
+- `enabled` means apply this skill's prepare/enforce discipline.
+- `deferred` means do not add infrastructure now; record the condition or date
+  that should reopen the question.
+- `declined` means do not add i18n infrastructure unless the project owner
+  explicitly revisits the decision.
+- Do not ask again while that recorded decision remains applicable.
+
+Personal dotfiles and one-owner utilities are not automatically i18n candidates.
+Their economics and maintenance burden differ from distributed software, so
+default neither to enabled nor declined—ask once and preserve the answer.
 
 ## The canonical 50 locales
 

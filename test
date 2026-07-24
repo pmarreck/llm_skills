@@ -54,4 +54,11 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_i18n_scope_policy"; then
+	printf 'PASS: i18n scope-decision policy\n'
+else
+	printf 'FAIL: i18n scope-decision policy\n' >&2
+	failures=$((failures + 1))
+fi
+
 exit "$failures"

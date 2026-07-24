@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -u
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+skill="$root/i18n/SKILL.md"
+failures=0
+
+require_text() {
+	local description="$1"
+	local needle="$2"
+	if rg -F -q -- "$needle" "$skill"; then
+		printf 'PASS: %s\n' "$description"
+	else
+		printf 'FAIL: %s\n' "$description" >&2
+		failures=$((failures + 1))
+	fi
+}
+
+require_text "existing non-i18n projects require an explicit owner decision" \
+	"ask the project owner whether to introduce i18n"
+require_text "decisions have three stable states" \
+	'`enabled`, `deferred`, or `declined`'
+require_text "decisions are recorded in project rules" \
+	"Record the decision in the project root's \`RULES.md\`"
+require_text "recorded decisions prevent repeated prompts" \
+	"Do not ask again while that recorded decision remains applicable."
+require_text "personal tooling is not automatically localized" \
+	"Personal dotfiles and one-owner utilities are not automatically i18n candidates."
+
+exit "$failures"
