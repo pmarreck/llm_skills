@@ -68,6 +68,9 @@ validator and still does not load bodies:
 memories/scripts/list-titles --headers ~/Code/PROJECT
 ```
 
+Both modes ignore generated `.codescan/` search-index directories in shared
+and project memory roots.
+
 The helper is also sourceable as the Bash function `list_memory_titles`.
 
 Read a body only after its filename or frontmatter makes it relevant. Validate

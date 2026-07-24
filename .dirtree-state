@@ -17,7 +17,7 @@ annotate=[
 	mechatron-ci = Shared Mechatron Prime CI skill with Codex UI metadata.
 	memories = Shared cross-agent workflow for typed durable memory recall, migration, validation, and consolidation.
 	memories/SKILL.md = Generic public contract for durable shared/project memory recall, UTC metadata, migration, validation, and consolidation.
-	memories/scripts/check-frontmatter = Validates and lists only the YAML headers of frontmatter Markdown memories.
+	memories/scripts/check-frontmatter = Validates memory YAML headers while pruning VCS metadata and generated .codescan search indexes.
 	memories/scripts/list-titles = Lists shared and project memory titles or validated headers; sourceable as list_memory_titles.
 	memories/scripts/migrate-legacy = Previews or safely migrates legacy memories, preserving bodies and rendering creation instants as UTC.
 	mfic = Design/judge tests and gates for trustworthiness — Mechanically-Falsifiable Independent Controls for LLM-produced work.
@@ -27,6 +27,7 @@ annotate=[
 	test = Runs the complete llm_skills installer regression suite.
 	tests/cli/test_codex_sync = Integration coverage for portable hook-driven Codex sync, recovery backups, and local-skill preservation.
 	tests/cli/test_install = Regression tests for CLI installer options, copied Codex skills, and rerun safety.
-	tests/cli/test_memory_titles = Classifies memory-title discovery across scopes, headers, missing roots, Git-less paths, and noglob shells.
+	tests/cli/test_memories = Regression-tests frontmatter validation, legacy migration, repository scaffolding, and .codescan pruning.
+	tests/cli/test_memory_titles = Classifies shared/project memory discovery and proves headers ignore VCS and .codescan metadata.
 	zig-microbenchmarks = Add benchmarks to a Zig project, track hot-path performance, and investigate regressions.
 ]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Validate the memory-frontmatter contract without reading Markdown bodies.
+# Validate memory frontmatter without reading bodies or generated search indexes.
 
 set -u
 
@@ -127,7 +127,7 @@ check_path() {
 		while IFS= read -r file; do
 			[ -n "$file" ] || continue
 			check_file "$file"
-		done < <(command find "$path" -type d -name .git -prune -o -type f -print)
+		done < <(command find "$path" -type d \( -name .git -o -name .codescan \) -prune -o -type f -print)
 	else
 		report_failure "$path" 'does not exist or is not a regular file or directory'
 	fi

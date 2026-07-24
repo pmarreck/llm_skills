@@ -135,15 +135,18 @@ else
 	fail 'migrator creates a checked frontmatter memory without altering its body'
 fi
 
-# A synced memory root is a Git repository: the checker must ignore VCS
-# scaffolding (.git/ and its non-hidden hook files, README.md, .gitignore)
-# while still flagging genuine legacy noise like MEMORIES.md.
+# A synced memory root is a Git repository with a generated search index. The
+# checker must ignore VCS scaffolding and .codescan/ while still flagging
+# genuine legacy noise like MEMORIES.md.
 git_root="$sandbox/gitrepo"
 mkdir -p "$git_root/.git/hooks"
 printf '%s\n' 'ref: refs/heads/yolo' > "$git_root/.git/HEAD"
 printf '%s\n' '#!/bin/sh' > "$git_root/.git/hooks/pre-commit.sample"
 printf '%s\n' '# Memory root' > "$git_root/README.md"
 printf '%s\n' '.DS_Store' > "$git_root/.gitignore"
+mkdir -p "$git_root/.codescan/nested"
+printf '%s\n' 'weights = {}' > "$git_root/.codescan/weights.toml"
+printf '%s\n' 'generated search index' > "$git_root/.codescan/nested/index.sqlite3"
 printf '%s\n' \
 	'---' \
 	'description: "Repo-hosted memory validates cleanly."' \
@@ -153,9 +156,9 @@ printf '%s\n' \
 	> "$git_root/repo.frontmatter.md"
 
 if "$CHECKER" "$git_root" >"$sandbox/git.out" 2>"$sandbox/git.err"; then
-	pass 'checker ignores git-repo scaffolding in a memory root'
+	pass 'checker ignores git-repo scaffolding and .codescan indexes in a memory root'
 else
-	fail 'checker ignores git-repo scaffolding in a memory root'
+	fail 'checker ignores git-repo scaffolding and .codescan indexes in a memory root'
 	cat "$sandbox/git.err" >&2
 fi
 

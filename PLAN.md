@@ -1,5 +1,7 @@
 # Plan
 
+- [x] Make memory title/header discovery and frontmatter validation prune every `.codescan/` search-index directory, then refresh Codex's materialized copy — completed 2026-07-24 09:29 EDT.
+  - Curiosity poke: generated hidden directories must be ignored without accidentally exempting ordinary hidden legacy files from validation.
 - [x] Add a cross-agent `capture-collaboration-evidence` skill that proactively
   notices, evaluates, and records artifact-backed cases where Peter/agent
   synthesis beats either starting approach.
