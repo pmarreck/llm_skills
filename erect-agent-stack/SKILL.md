@@ -24,7 +24,7 @@ reviewer reasoning from the contract, ideally a *different model family* than th
 producer; see the `mfic` skill). Mixing backends is how you get genuine cross-model
 independence on a producer/approver pair.
 
-Bare names resolve to `~/Documents-CloudManaged/<name>`; paths are used as-is.
+Bare names resolve to `~/Code/<name>`; paths are used as-is.
 Missing dir is an error (exit 66) — this tool never scaffolds. Session name =
 directory basename: the load-bearing fleet convention (LLMsend depends on it).
 
