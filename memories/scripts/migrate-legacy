@@ -138,14 +138,20 @@ creation_epoch() {
 	printf '%s\n' "$epoch"
 }
 
-utc_datetime() {
-	local epoch="$1" stamp
-	if stamp=$(TZ=UTC0 date -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null); then
-		:
+local_datetime() {
+	local epoch="$1" stamp zone
+	# Local wall time, not UTC: the offset and zone abbreviation are both
+	# derived from this record's own instant, so daylight-saving boundaries
+	# are handled correctly instead of assuming one offset year-round.
+	if stamp=$(date -d "@$epoch" '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null); then
+		zone=$(date -d "@$epoch" '+%Z')
 	else
-		stamp=$(TZ=UTC0 date -r "$epoch" '+%Y-%m-%dT%H:%M:%SZ')
+		stamp=$(date -r "$epoch" '+%Y-%m-%dT%H:%M:%S%z')
+		zone=$(date -r "$epoch" '+%Z')
 	fi
-	printf '%s\n' "$stamp"
+	# Normalize +hhmm to +hh:mm for ISO 8601; BSD date has no %:z.
+	stamp="${stamp%??}:${stamp: -2}"
+	printf '%s # %s\n' "$stamp" "$zone"
 }
 
 escape_yaml_string() {
@@ -184,7 +190,7 @@ migrate_file() {
 			return
 			;;
 	esac
-	datetime=$(utc_datetime "$epoch")
+	datetime=$(local_datetime "$epoch")
 
 	if [ "$mode" = dry-run ]; then
 		printf 'MIGRATE %s -> %s\n' "$file" "$target"

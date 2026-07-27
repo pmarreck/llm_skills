@@ -30,14 +30,22 @@ It starts with exactly these three YAML fields, then a closing `---`:
 ```markdown
 ---
 description: "One searchable sentence stating the durable lesson."
-datetime: 2026-07-20T13:00:00Z
+datetime: 2026-07-20T09:00:00-04:00 # EDT
 tags: [memory, memories, metadata, frontmatter]
 ---
 ```
 
-- Store datetimes as timezone-aware ISO 8601. Default to UTC (`Z`) for new and
-  migrated records; honor a different timezone-aware convention only when
-  local instructions explicitly require one.
+- Store datetimes as timezone-aware ISO 8601 in the machine's **local**
+  timezone: local wall time, its numeric UTC offset, and a trailing comment
+  naming the zone abbreviation in effect **on that date**. Do not default to
+  UTC. Where a zone observes daylight saving the offset and abbreviation both
+  shift through the year, so derive them from the record's own date rather
+  than assuming one value year-round. Generate them instead of hand-computing:
+  `date +%Y-%m-%dT%H:%M:%S%:z` for the stamp and `date +%Z` for the label.
+- UTC (`Z`) remains a valid, equivalent representation of the same instant and
+  still passes validation. Existing `Z` records are correct: **do not rewrite
+  them merely to change representation.** Re-stamp a record only when its
+  stored instant is genuinely wrong.
 - Keep recalled metadata unchanged and deterministic. Convert timestamps to a
   reader's local timezone only as an explicit presentation step, never as a
   silent read-time rewrite.
