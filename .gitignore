@@ -6,3 +6,7 @@ CLAUDE*.md
 
 # Bundled Codex skills are machine-local, not shared workflows.
 .system/
+
+# Nix build outputs
+/result
+/result-*

@@ -1,5 +1,7 @@
 # llm_skills
 
+[![Mechatron Prime CI](https://img.shields.io/endpoint?url=https%3A%2F%2Fthelio-nixos.tail66c90.ts.net%2Fbadges%2Fllm_skills.json&style=for-the-badge)](https://thelio-nixos.tail66c90.ts.net/mechatron-prime/)
+
 A collection of cross-cutting [Claude Code](https://docs.claude.com/en/docs/claude-code/overview)
 skills — focused, repeatable procedures that an LLM coding agent invokes
 on demand when the situation matches.

@@ -3,7 +3,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-source "$HOME/dotfiles/bin/src/capture.bash"
+source "${CAPTURE_LIB:-$HOME/dotfiles/bin/src/capture.bash}"
 
 failures=0
 sandbox="$(mktemp -d)"

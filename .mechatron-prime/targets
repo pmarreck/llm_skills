@@ -1,0 +1,7 @@
+# Mechatron Prime build targets for pmarreck/llm_skills.
+#
+# This repository is Bash tooling plus its skills, not documentation: the
+# check runs the full ./test suite inside a pure Nix sandbox, so a dependency
+# satisfied only by a globally installed tool fails here instead of surviving
+# as a false green.
+checks.x86_64-linux.test
