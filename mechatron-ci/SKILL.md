@@ -45,6 +45,19 @@ or reformat a badge URL.
    `/badges/<REPOSITORY>.json` and the README badge. A new badge appears after
    its first accepted build. Verify `PASSING` only after the worker completes;
    do not describe `BUILDING` as green.
+7. Give the project agent a self-service verification command. On any
+   Nix-capable tailnet machine with the `mechatron-ci` package installed, use:
+
+   ```bash
+   mechatron-ci queue --project REPOSITORY --commit SHA_PREFIX --json
+   mechatron-ci log --project REPOSITORY --commit SHA_PREFIX --json
+   ```
+
+   `queue` reports the active job separately from the worker's claimed batch
+   and the FIFO waiting queue; it includes enqueue/start timestamps and elapsed
+   seconds. `log` reports recent completed outcomes with their terminal run
+   duration. `SHA_PREFIX` is 7–40 hexadecimal characters. Prefer the JSON form
+   for agents; it is a private Tailscale operations API, never a README link.
 
 ## Boundaries
 
