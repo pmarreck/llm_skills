@@ -1,7 +1,6 @@
 ---
 name: handoff
 description: Condense the current state of development affairs into a handoff document for another agent to pick up, and give that agent a sense of purpose and intent.
-argument-hint: What will the next session be used for?
 ---
 
 # handoff — write a session handoff document for the next agent
@@ -88,6 +87,32 @@ sub-section and the "how this advances the goals" sentence. The rest
 of the handoff (Completed / In-Flight / Next) should be slanted to
 prioritize information relevant to that focus.
 
+### Step 1a — audit branch provenance
+
+Before writing, inspect Git branch ownership and ancestry without mutating
+refs:
+
+```bash
+git for-each-ref \
+  --format='%(refname:short)|%(objectname)|upstream=%(upstream:short)|track=%(upstream:track)|%(subject)' \
+  refs/heads refs/remotes
+git ls-remote --heads origin
+git worktree list --porcelain
+```
+
+For every non-primary or suspicious branch, record its exact ref/SHA, upstream
+or authoritative remote head, linked worktree (if any), ahead/behind counts,
+merge-base, unique commits, and enough reflog plus author/committer metadata to
+explain where it came from. Treat missing tracking, unrelated ancestry,
+unowned worktrees, unclear unique commits, or disagreement between local
+remote-tracking refs and `git ls-remote` as provenance risks.
+
+Add a **Branch provenance** subsection to the handoff. State either that every
+branch has adequate provenance, or enumerate questionable/stale branches with
+evidence and a recommended human decision. Do not fetch with `--prune`, delete,
+merge, rebase, or otherwise mutate a questionable branch during handoff; the
+point is to preserve and surface history, not clean it up.
+
 ### Step 2 — summarize current work
 
 After PURPOSE & INTENT, three required sections:
@@ -100,6 +125,9 @@ After PURPOSE & INTENT, three required sections:
 - **Coming up next** — the immediate next steps the next session
   should take. Order them. If the user provided an argument, anchor
   this list around it.
+- **Branch provenance** — exact local/remote branch state, tracking and
+  worktree ownership, plus any stale, divergent, unrelated, or unexplained
+  branch that needs a human retain/merge/delete decision.
 
 ### Step 3 — be complete; reference rather than duplicate
 
@@ -275,6 +303,9 @@ The final document should follow this shape:
 ## In-flight
 - <item> — done: <X>; remaining: <Y>; blockers: <Z or none>
 
+## Branch provenance
+- <branch/ref, exact SHA, tracking/worktree/ancestry evidence, classification>
+
 ## Coming up next
 1. <step>
 2. <step>
@@ -307,6 +338,9 @@ The final document should follow this shape:
 - **`rm`-ing old handoffs.** Trash only. The user may want them.
 - **Not adding `HANDOFF*` to `.gitignore`.** These are
   session-ephemeral; committing them clutters history.
+- **Ignoring non-primary branches.** A cold successor can otherwise miss
+  unmerged work, stale intent, or an unexplained ref whose cleanup would lose
+  recoverable history.
 - **Pasting the user's literal `/handoff` argument as the IMMEDIATE
   GOAL**. The argument is a *focus hint*; translate it into the
   project's vocabulary and goals.
