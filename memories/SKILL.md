@@ -17,6 +17,41 @@ circumstances — in a project-scoped memory. Keep such context only in the
 private shared root (`$HOME/MEMORIES/`) or a dedicated private context pack.
 Project memories hold only the durable technical lesson.
 
+## Is this a memory, or does another system fit better?
+
+Memories are one of three durable-knowledge systems. Before writing here, check
+whether one of the others fits the thing better — and if two genuinely apply,
+**record it in both.** Duplication is explicitly allowed. The failure worth
+avoiding is a lesson that went unrecorded because each system assumed another
+owned it.
+
+| System | Answers | Shape |
+|---|---|---|
+| **memories** (this) | "What do I need to know?" | A durable **lesson**, generally true, not tied to one place in the code |
+| **ADR** — `<project>/ADR.tsv` | "**Why** is this thing the way it is?" | A **decision**, with the alternatives that lost and the tradeoff accepted, bound to specific paths |
+| **`capture-collaboration-evidence`** | "What proves human and agent together beat either alone?" | An **interaction effect** — each party materially improved the other's reasoning |
+
+The discriminator: **does it bind to a place in the code that someone might
+later change?**
+
+- **Yes → ADR.** Its `where` field is the point: it lets the decision resurface
+  at the moment someone reaches for that file. This is the Chesterton's Fence
+  case — "this looks wrong, I'll simplify it," where the reason it exists has
+  been lost.
+- **No, it is a general truth → memory.** "`git checkout -- <file>` restores
+  from the index, not HEAD" belongs everywhere and nowhere; there is no single
+  file it guards.
+
+Independently of the above: if the insight arose from a human and an agent
+improving each other's reasoning, it also belongs in
+`capture-collaboration-evidence` — *in addition to* whichever system above
+applies, not instead of it.
+
+Same fact can legitimately land twice. "A flag that preserves literal newlines
+will break any one-record-per-line format" is a **memory** (true everywhere,
+for anyone) *and* an **ADR** in the project whose log format it would break.
+Different jobs, both worth doing.
+
 ## Required format
 
 Every memory is a regular Markdown file named:

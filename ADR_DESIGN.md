@@ -141,14 +141,44 @@ it rather than reason about it.
 ### 3.3 Worked example
 
     id	when	who	…
-    adr-20260728T184012-0400-7f3a	2026-07-28T18:40:12-04:00	agent+peter	claude-opus-5/Einstein	accentd must not auto-start	system76_thelio_nixos/accentd.nix	accepted		commit:c8042cb	…
+    019faaf8-f40e-7dd9-9794-ae43b2d8ca0c	2026-07-28T18:40:12-04:00	agent+peter	claude-opus-5/Einstein	accentd must not auto-start	system76_thelio_nixos/accentd.nix	accepted		commit:c8042cb	…
 
 Empty fields are empty strings between tabs. Do not write `-` or `null`: both
 are valid *data*, and a reader cannot distinguish them from a real value.
 
 ### Field rules
 
-- **`when`** — ISO 8601 **with offset**, Eastern (`-04:00` EDT / `-05:00` EST),
+- **`id`** — a **UUIDv7**, from Peter's `uuidv7` tool (RFC 9562, time-ordered,
+  strictly monotonic). Peter's call, 2026-07-28, replacing an earlier
+  timestamp+random scheme.
+
+  Three properties earn it: it embeds its own creation time; it is **lexically
+  sortable**, so the log sorts chronologically by `id` alone with no date
+  parsing; and it will not collide between concurrent agents. That last one is
+  not hypothetical — two agents committing to one repo within the same minute
+  happened for real on 2026-07-28, the same day this was specced.
+
+  Sequential `adr-0001` numbering was rejected for exactly that collision
+  reason. It reads better in a `supersedes` field, and that is not worth a
+  silent ID clash.
+
+  `uuidv7` accepts `nanoseconds-from-epoch` as an argument, so tests inject a
+  fixed instant rather than reading the clock — no timing hacks, deterministic
+  ordering assertions.
+- **`when`** — ISO 8601 **with offset**. Peter raised `datetimestamp`
+  (`20260728190357.886`, millisecond precision) as a candidate; **not used
+  here**, for two reasons. It carries **no UTC offset**, and this log spans
+  machines and DST transitions, so a bare local timestamp is genuinely
+  ambiguous twice a year — precisely when a reader most wants to know what
+  happened first. And its millisecond precision is already covered: UUIDv7
+  embeds a 48-bit millisecond timestamp (RFC 9562), so `id` carries ordering.
+
+  That leaves a clean division of labour — **`id` is for machines** (sort,
+  uniqueness, embedded instant); **`when` is for humans** (readable,
+  unambiguous). `datetimestamp` remains the right tool where a compact local
+  stamp is wanted, e.g. filenames.
+
+  Eastern (`-04:00` EDT / `-05:00` EST),
   matching the `memories` skill convention. Derive the offset from the record's
   own date; never assume one year-round.
 - **`who`** — the three-value enum above. Required. No default: a missing value
@@ -299,9 +329,8 @@ Design constraints:
   fence matters most, but hooking every `Read` is likely too noisy.
 - **Cross-project decisions.** Some fences are fleet-wide (the C-CLI/FFI rule,
   the `-n` prohibition above). A per-project `ADR.tsv` cannot express those.
-  Possibly a shared root, possibly they belong in `~/MEMORIES/` instead — the
-  boundary between "durable lesson" (memories) and "decision with alternatives"
-  (ADR) needs drawing before both exist and drift.
+  Possibly a shared root, possibly they belong in `~/MEMORIES/` instead. (The
+  *boundary* question this used to raise is now answered — see §9.)
 - **Retrofitting.** There are years of undocumented fences. Do not bulk-generate
   records for them; an ADR reconstructed by an agent guessing at intent is worse
   than no ADR, because it *looks* authoritative. Record decisions going forward,
@@ -323,3 +352,55 @@ predicate over a few happy-path examples:
 - Roundtrip: every field decodes byte-identically to what was written.
 - **Search recipe:** encoding a needle that contains a tab, newline or `|`
   finds the record; the raw needle must not.
+
+## 9. Which system? ADR vs memories vs collaboration evidence
+
+Peter, 2026-07-28: *"use the one that applies better"* — and where a thing
+genuinely qualifies for two, **file it in both.** Duplication across these
+three is explicitly allowed; a decision that never got recorded because each
+system assumed the other owned it is the failure worth avoiding.
+
+The fleet runs three durable-knowledge systems. They are not competitors; they
+answer different questions.
+
+| System | Answers | Shape | Root |
+|---|---|---|---|
+| **`memories`** | "What do I need to know?" | A durable **lesson**, generally true, not tied to one place in the code | `~/MEMORIES/` (shared) or `<project>/MEMORIES/` |
+| **ADR** (this) | "**Why** is this thing the way it is?" | A **decision**, with the alternatives that lost and the tradeoff accepted, bound to specific paths | `<project>/ADR.tsv` |
+| **`capture-collaboration-evidence`** | "What proves human+agent beat either alone?" | An **interaction effect** — each party materially improved the other's reasoning | private global ledger |
+
+### The discriminator
+
+**Does it bind to a place in the code that someone might later change?**
+
+- **Yes → ADR.** The `where` field is the entire point: it is what lets the
+  retrieval hook explain the fence at the moment someone reaches for it. A
+  decision with no `where` cannot be retrieved when it matters.
+- **No, it is a general truth → memory.** "`git checkout -- <file>` restores
+  from the index, not HEAD" is a lesson. It belongs everywhere and nowhere;
+  there is no single file it guards.
+
+**Did it arise from Peter and an agent improving each other's reasoning?**
+
+- **Yes → also collaboration evidence**, *in addition to* whichever of the
+  above applies. This is the dual-filing case Peter called out, and
+  architectural decisions land in it often, because the good ones usually come
+  from an argument rather than from either party alone.
+
+### Worked example (this very document)
+
+The TSV-over-NDJSON decision qualifies for **two** systems:
+
+- **ADR** — it is a decision, it has rejected alternatives, and it binds to
+  `ADR.tsv`. That is `adr-0001`.
+- **Collaboration evidence** — Peter proposed TSV for space-saving; the agent
+  measured and found a stronger justification (forbidden-set size), which then
+  exposed a real flaw in the agent's *own* prior design (bare `-s` silently
+  broke `rg`). Neither party had that answer at the start.
+
+It is **not** a memory: it is specific to this format, not a general lesson.
+
+Whereas "printable-binary's `-n` flag preserves literal newlines and will break
+any one-record-per-line format" **is** a memory — it is true everywhere, for
+anyone, forever — *and* an ADR here, because it guards `ADR.tsv` specifically.
+Same fact, two systems, different jobs. File it twice.
