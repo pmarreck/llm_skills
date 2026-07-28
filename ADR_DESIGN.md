@@ -25,7 +25,7 @@ The fleet already loses this constantly. Concrete examples from a single day:
   core. A reasonable agent "simplifies" that to Zig and silently destroys the
   boundary the whole design rests on.
 - `printable-binary -s` and never `-n`, because `-n` preserves literal newlines
-  and would break NDJSON's one-record-per-line invariant. `-n` looks like a
+  and would break the one-record-per-line invariant. `-n` looks like a
   harmless legibility upgrade.
 
 Commit messages carry some of this, but they are keyed to *when a change
@@ -72,24 +72,79 @@ difference.
 
 ## 3. Record schema
 
-One JSON object per line, NDJSON. Append-only.
+**TSV, one record per line, append-only, with a header line.** Peter's call,
+2026-07-28. The columns, in order:
 
-```json
-{
-  "id": "adr-20260728T184012-0400-7f3a",
-  "when": "2026-07-28T18:40:12-04:00",
-  "who": "agent+peter",
-  "agent": "claude-opus-5/Einstein",
-  "what": "accentd must not auto-start",
-  "where": ["system76_thelio_nixos/accentd.nix"],
-  "status": "accepted",
-  "supersedes": null,
-  "evidence": ["commit:c8042cb"],
-  "why_pb": "…printable-binary…",
-  "alternatives_pb": "…printable-binary…",
-  "how_pb": "…printable-binary…"
-}
+    id  when  who  agent  what  where  status  supersedes  evidence  why  alternatives  how
+
+### Why TSV and not NDJSON
+
+The obvious argument is size — TSV does not repeat a key name on every record.
+The **better** argument, which is what actually decided it:
+
+> A format's escaping burden is the size of its forbidden-character set.
+> **TSV forbids exactly three characters: TAB, CR, LF.** NDJSON forbids those
+> *plus* `"` and `\`.
+
+Because printable-binary must encode every forbidden character into a glyph,
+a smaller forbidden set means **more of the text survives literally** — and
+literal text is text that `rg` finds and an indexer indexes. Under NDJSON we
+would be forced to mangle every quote and backslash in the corpus. Under TSV we
+mangle nothing a human would type.
+
+That is the whole reason the switch is worth making, and it is measured, not
+asserted (§3.2).
+
+### 3.1 The encoding contract
+
+Every field is encoded with:
+
+```bash
+printable-binary -s -P '!"#$%&'"'"'()*+,-/:;<=>?[\]`{}~'
 ```
+
+- `-s` preserves spaces.
+- `-P …` preserves every printable ASCII punctuation mark **except `|`**.
+- Decode with `printable-binary -d`.
+
+Exactly three characters are reserved and can therefore never appear literally
+in a field:
+
+| Reserved | Role | Becomes, in data |
+|---|---|---|
+| TAB | field separator | `⥅` |
+| LF | record separator | `¶` |
+| `\|` | sub-delimiter inside a multi-valued field (`where`, `evidence`) | `∣` |
+
+`|` is deliberately withheld from the preserve set for exactly this reason: it
+cannot survive literally, so a literal `|` in the file is *unambiguously* a
+separator rather than data. Without that exclusion a filename containing a pipe
+would silently split into two paths.
+
+Everything else — quotes, backslashes, slashes, hyphens, colons, parentheses —
+passes through **verbatim**, so records read as ordinary prose.
+
+### 3.2 Verified, exhaustively, not by example
+
+Run against **all 256 byte values**, 2026-07-28:
+
+- Zero bytes encode to TAB, CR, or LF under the contract above. The TSV
+  invariant holds over the entire input domain, not over a sampled tab.
+- Byte `0x7C` (`|`) never survives literally; it becomes `∣`.
+- `Use printable-binary -s for src/main.rs (why? "escaping").` encodes to
+  **itself, byte for byte** — fully `rg`-searchable.
+- Roundtrip is byte-identical.
+
+This is the cheap strong control: the domain is finite (256 values), so exhaust
+it rather than reason about it.
+
+### 3.3 Worked example
+
+    id	when	who	…
+    adr-20260728T184012-0400-7f3a	2026-07-28T18:40:12-04:00	agent+peter	claude-opus-5/Einstein	accentd must not auto-start	system76_thelio_nixos/accentd.nix	accepted		commit:c8042cb	…
+
+Empty fields are empty strings between tabs. Do not write `-` or `null`: both
+are valid *data*, and a reader cannot distinguish them from a real value.
 
 ### Field rules
 
@@ -109,41 +164,86 @@ One JSON object per line, NDJSON. Append-only.
 - **`evidence`** — commit SHAs, test names, benchmark rows. A decision with no
   evidence is an opinion; say so by leaving this empty rather than inventing.
 
-### Why `_pb` (printable-binary) for prose fields
+### Why encode at all
 
-Fields carrying free text are stored **printable-binary encoded**, with the
-`_pb` suffix making the encoding self-describing. Encode with `-s` (preserve
-spaces); decode with `-d`.
+Convenience is the small part: prose keeps its linebreaks, markdown, and
+quotes. The real argument is correctness. The encoder emits no TAB, no CR and
+no LF **over the entire 256-byte input domain**, so *"an agent botched the
+escaping and corrupted the log"* becomes **inexpressible** rather than merely
+unlikely.
 
-The convenience argument is that prose keeps its linebreaks, markdown, and
-quotes. The **real** argument is correctness: `printable-binary -s` emits no
-`"`, no `\`, and no newline, verified over the full byte range. Dropping its
-output into a JSON string therefore makes *"agent botched the escaping and
-corrupted the log"* **inexpressible** rather than merely unlikely. That is the
-same move `sigil` made when it dropped `std.json` for a parser whose valid
-inputs cannot reach the dangerous paths — and escaping is exactly the class of
-thing a hurried LLM gets wrong.
-
-Verified 2026-07-28: 123 bytes of prose containing `"`, `\`, blank lines and
-markdown encoded to 151 bytes, zero dangerous characters, byte-identical
-roundtrip.
+That is the same move `sigil` made dropping `std.json` for a parser whose valid
+inputs cannot reach the dangerous paths — and botched escaping is exactly the
+class of thing a hurried LLM produces.
 
 > **Never use `-n` / `--crlf`.** It preserves literal newlines, which would put
-> a raw newline inside a record and break NDJSON's one-record-per-line
-> invariant. `-s` alone is correct. This is precisely the kind of
-> plausible-looking "improvement" an ADR exists to prevent.
+> a raw newline inside a record and break the one-record-per-line invariant.
+> This is precisely the kind of plausible-looking "improvement" an ADR exists
+> to prevent — which is why it is the subject of `adr-0001`.
+
+### Searching the log
+
+Peter, 2026-07-28: *"the trick to rg searching `printable-binary` is to first
+encode the search string... using printable-binary."*
+
+That is the canonical recipe, and it is correct **by construction** — encode
+the needle with the same contract as the haystack, then compare like with like:
+
+```bash
+rg "$(printf '%s' "$QUERY" | printable-binary -s -P '!"#$%&'"'"'()*+,-/:;<=>?[\]`{}~')" ADR.tsv
+```
+
+Under the contract in §3.1 this is a **no-op for ordinary prose** — which is
+the entire reason that contract was chosen over bare `-s`. It matters only when
+the query contains a tab, a newline, or a `|`.
+
+Worth keeping the recipe anyway: it stays correct if the preserve set is ever
+narrowed, whereas typing the raw query only works by accident of the current
+configuration. Under bare `-s` — the first design — `rg "printable-binary"`
+silently found nothing, because the hyphen had become `˗`. A search that
+returns zero hits looks exactly like "no such decision was ever recorded,"
+which is the most dangerous possible failure for a Chesterton's Fence system.
+
+### Indexing
+
+Peter, 2026-07-28: *"for indexing, we'd have to index the decoded text, that's
+all."* Correct, and it is the whole story — a semantic indexer (codescan)
+**decodes each field first** and indexes the plaintext, keyed by record `id`.
+
+So the two retrieval paths differ, and neither is redundant:
+
+| Path | Sees | Needs decoding? |
+|---|---|---|
+| `rg` / grep | the file as stored | no, under the §3.1 contract |
+| semantic index | decoded plaintext per record | yes, at index time |
+
+The `rg`-literal property is therefore a *convenience* for ad-hoc grepping, not
+a prerequisite for real search. It is still worth having: ad-hoc grepping is
+what actually happens at 2 a.m.
+
+### The sub-delimiter trap (found the hard way)
+
+Multi-valued fields join **separately-encoded** values with a **literal** `|`.
+The obvious-looking `encode("a|b")` is wrong: it encodes the delimiter too,
+producing `a∣b`, which is a *single* value that merely looks split.
+
+This was gotten wrong while writing `adr-0001` itself, and caught only because
+the check asserted `where` splits into two paths rather than asserting the field
+was non-empty. A `where` that silently collapses to one bogus path matches
+nothing, so retrieval fails **silently** — the failure mode this whole system
+exists to prevent. Any implementation must have a set-level test for it.
 
 ## 4. Storage
 
-`<project>/ADR.ndjson`, committed. Rationale:
+`<project>/ADR.tsv`, committed. Rationale:
 
 - Per-project, because `~/Code` is deliberately not a repo.
 - Committed, because a decision log that is not version-controlled loses the
   one thing that makes it trustworthy — its own history.
-- Single file, because append-only NDJSON survives concurrent agents far better
+- Single file, because append-only TSV survives concurrent agents far better
   than a directory of numbered markdown files, which collide on the next index.
 
-Privacy: `ADR.ndjson` is committed and some repos are public. Anything personal
+Privacy: `ADR.tsv` is committed and some repos are public. Anything personal
 belongs in `~/MEMORIES/`, not here — same rule the `memories` skill applies.
 
 ## 5. Capture — a deliberately invoked skill
@@ -182,7 +282,7 @@ Design constraints:
 - **Must fail open.** An interactive hook that blocks edits when its matcher
   errors would make the fleet unusable. Same reasoning as `shellcheck-gate`
   (and unlike a CI gate, which should fail closed).
-- **Must be fast.** It runs before every edit. A linear scan of an NDJSON file
+- **Must be fast.** It runs before every edit. A linear scan of a TSV file
   is fine at thousands of records; revisit only when measured, not before.
 - **Must be quiet on a miss.** Most edits touch no fence. Silence on no-match
   is required or agents learn to ignore the output.
@@ -198,7 +298,7 @@ Design constraints:
 - **Does the hook fire on read paths too?** Reading before changing is when a
   fence matters most, but hooking every `Read` is likely too noisy.
 - **Cross-project decisions.** Some fences are fleet-wide (the C-CLI/FFI rule,
-  the `-n` prohibition above). A per-project `ADR.ndjson` cannot express those.
+  the `-n` prohibition above). A per-project `ADR.tsv` cannot express those.
   Possibly a shared root, possibly they belong in `~/MEMORIES/` instead — the
   boundary between "durable lesson" (memories) and "decision with alternatives"
   (ADR) needs drawing before both exist and drift.
@@ -220,4 +320,6 @@ predicate over a few happy-path examples:
 - Malformed records: truncated line, unknown `who`, missing `where`, prose in
   `where`. Each must be reported, never silently skipped — a skipped record is
   an unexplained fence.
-- Roundtrip: every `_pb` field decodes byte-identically to what was written.
+- Roundtrip: every field decodes byte-identically to what was written.
+- **Search recipe:** encoding a needle that contains a tab, newline or `|`
+  finds the record; the raw needle must not.
