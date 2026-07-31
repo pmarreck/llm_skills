@@ -150,7 +150,22 @@ README badge, and live verification; do not reproduce those details here.
             buildPhase = ''
               export HOME=$TMPDIR
               ${pkgs.lib.optionalString pkgs.stdenv.isDarwin "unset NIX_CFLAGS_COMPILE NIX_LDFLAGS"}
-              timeout 600 zig build test || { echo "Tests failed"; exit 1; }
+              # FLEET FLOOR — tests run ReleaseSafe (fleet finding 2026-07-01,
+              # adopted fleet-wide 2026-07-29; new projects are BORN with it).
+              # ReleaseFast compiles OUT the runtime safety checks (integer
+              # overflow, bounds, illegal cast), so a green ReleaseFast suite
+              # cannot observe UB — it passes *because* the check that would
+              # have failed it is gone. This is not theoretical: it hid three
+              # real crashers in rarz (every multi-file archive was silently
+              # CORRUPT while reporting VALID) and a u32 underflow in tiffz
+              # that produced the correct answer by accident for months.
+              #
+              # Set HERE on the command line, not as a per-module `.optimize`
+              # in build.zig: Zig honours per-module optimize, so pinning only
+              # the test module leaves imported library code at ReleaseFast.
+              #
+              # Shipped artifact and benchmarks stay ReleaseFast.
+              timeout 600 zig build test -Doptimize=ReleaseSafe || { echo "Tests failed"; exit 1; }
             '';
             installPhase = ''
               mkdir -p $out
@@ -254,11 +269,16 @@ pub fn build(b: *std.Build) void {
         .flags = &.{ "-std=c11", "-Wall", "-Wextra" },
     });
     cli_mod.addIncludePath(b.path("include"));
+    // Zig 0.16: linkLibrary lives on the MODULE, not on Build.Step.Compile.
+    // The 0.12-0.15 form `cli.linkLibrary(lib)` fails with
+    //   "no field or member function named 'linkLibrary' in 'Build.Step.Compile'"
+    // See ZIG_RECENT_API_CHANGES.md §3 (Build System) — it has documented this
+    // since before this template was written.
+    cli_mod.linkLibrary(lib);
     const cli = b.addExecutable(.{
         .name = "{{CLI_NAME}}",
         .root_module = cli_mod,
     });
-    cli.linkLibrary(lib);
     b.installArtifact(cli);
 
     // -- Run step --
@@ -445,6 +465,16 @@ int main(int argc, char* argv[]) {
 ## Common Mistakes
 
 <important>
+- **READ `ZIG_RECENT_API_CHANGES.md` BEFORE using these templates.** It is the
+  canonical reference and it is *ahead of this skill*. On 2026-07-31 this
+  template still carried the 0.15 `cli.linkLibrary(lib)` form even though the
+  doc had documented the 0.16 module-level form all along — the scaffold failed
+  to build, purely because the template was used without consulting the
+  reference. If a template here disagrees with that doc, **the doc wins**, and
+  fix the template.
+- **Tests must be built ReleaseSafe, shipped artifacts ReleaseFast.** A green
+  ReleaseFast test suite cannot see UB, because the checks that would fail it
+  are compiled out. New projects start with the floor already in the flake.
 - **Forgetting `export HOME=$TMPDIR`** in flake.nix buildPhase -- Zig needs a writable HOME
 - **Missing `dontConfigure = true`** -- Nix tries to run `./configure` otherwise
 - **Using `main` branch** -- Peter's projects always use `yolo`
