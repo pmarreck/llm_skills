@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+
+# Prove session selection is deterministic and day-anchored: it takes the whole
+# of the most recent day that had conversation (not merely the last session,
+# which is often a trivial two-message one), and walks backwards only until it
+# has enough REDUCED text to be worth summarising.
+
+set -u
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+subject="$ROOT/onboard/scripts/collect-claude-context"
+failures=0
+sandbox=$(mktemp -d "${TMPDIR:-/tmp}/onboard-collect.XXXXXX")
+
+cleanup() {
+	case "$sandbox" in
+		"${TMPDIR:-/tmp}"/onboard-collect.*) rm -rf -- "$sandbox" ;;
+	esac
+}
+trap cleanup EXIT
+
+pass() { printf 'PASS: %s\n' "$1"; }
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_contains() {
+	local label="$1" haystack="$2" needle="$3"
+	case "$haystack" in
+		*"$needle"*) pass "$label" ;;
+		*) fail "$label"; printf '  missing: %q\n' "$needle" >&2 ;;
+	esac
+}
+
+assert_absent() {
+	local label="$1" haystack="$2" needle="$3"
+	case "$haystack" in
+		*"$needle"*) fail "$label"; printf '  leaked: %q\n' "$needle" >&2 ;;
+		*) pass "$label" ;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+# A fake projects root. The real one is ~/.claude/projects; the tool takes it
+# from ONBOARD_PROJECTS_DIR so this test never depends on real conversations.
+# ---------------------------------------------------------------------------
+
+projects="$sandbox/projects"
+slug="-work-proj"          # the cwd /work/proj with '/' replaced by '-'
+mkdir -p "$projects/$slug"
+
+# turns: <file> <session-id> <date> <marker> <count>
+make_session() {
+	local file="$projects/$slug/$1.jsonl" sid="$1" date="$2" marker="$3" count="$4" i=1
+	: > "$file"
+	while [ "$i" -le "$count" ]; do
+		printf '{"type":"user","timestamp":"%sT1%d:00:00.000Z","sessionId":"%s","cwd":"/work/proj","gitBranch":"yolo","promptSource":"typed","message":{"role":"user","content":"%s turn %d %s"}}\n' \
+			"$date" "$((i % 10))" "$sid" "$marker" "$i" \
+			"$(printf 'padpadpadpadpadpadpadpadpadpadpadpadpadpadpadpadpadpad%.0s' 1 2 3 4 5 6 7 8)" >> "$file"
+		printf '{"type":"assistant","timestamp":"%sT1%d:00:05.000Z","sessionId":"%s","message":{"role":"assistant","content":[{"type":"text","text":"reply %d"}]}}\n' \
+			"$date" "$((i % 10))" "$sid" "$i" >> "$file"
+		i=$((i + 1))
+	done
+	touch -d "${date}T23:00:00Z" "$file" 2>/dev/null || touch "$file"
+}
+
+# Most recent day (2026-07-30) had TWO sessions: a big one and a trivial one.
+# Naive "last session" selection would grab only the trivial one.
+make_session sess-newest-small 2026-07-30 NEWESTSMALL 1
+make_session sess-newest-big   2026-07-30 NEWESTBIG   6
+# The day before, and an older day beyond it.
+make_session sess-midday       2026-07-29 MIDDAY      6
+make_session sess-ancient      2026-06-01 ANCIENT     6
+
+# A different project must never be mixed in.
+mkdir -p "$projects/-work-other"
+make_session_other() {
+	printf '{"type":"user","timestamp":"2026-07-30T12:00:00.000Z","sessionId":"other","cwd":"/work/other","promptSource":"typed","message":{"role":"user","content":"OTHERPROJECT do not include me"}}\n' \
+		> "$projects/-work-other/sess-other.jsonl"
+}
+make_session_other
+
+export ONBOARD_PROJECTS_DIR="$projects"
+
+if [ ! -x "$subject" ]; then
+	fail "collector exists and is executable at onboard/scripts/collect-claude-context"
+	printf '  (all remaining assertions skipped)\n' >&2
+	exit 1
+fi
+
+# --- default: the whole most-recent DAY, both sessions ---------------------
+out=$("$subject" --cwd /work/proj --min-bytes 1 2>"$sandbox/err")
+rc=$?
+err=$(cat "$sandbox/err")
+
+if [ "$rc" -eq 0 ]; then
+	pass 'collector exits 0'
+else
+	fail 'collector exits 0'; printf '  stderr: %s\n' "$err" >&2
+fi
+
+assert_contains 'takes the big session from the most recent day' "$out" 'NEWESTBIG'
+assert_contains 'takes the trivial session from the same day too' "$out" 'NEWESTSMALL'
+assert_absent 'does not reach back a day when it already has enough' "$out" 'MIDDAY'
+assert_absent 'never mixes in another project' "$out" 'OTHERPROJECT'
+
+# --- size floor forces a walk backwards, day by day ------------------------
+# Derive the floor from what the newest day actually reduces to, rather than
+# hardcoding a number that silently stops testing the walk when the fixture
+# changes size.
+newest_day_bytes=$("$subject" --cwd /work/proj --list 2>/dev/null \
+	| awk '$1 == "2026-07-30" { s += $2 } END { print s + 0 }')
+if [ "$newest_day_bytes" -gt 0 ]; then
+	pass "newest day reduces to a measurable size ($newest_day_bytes B)"
+else
+	fail 'newest day reduces to a measurable size'
+fi
+floor=$((newest_day_bytes + 1000))
+big=$("$subject" --cwd /work/proj --min-bytes "$floor" --max-days 30 2>/dev/null)
+assert_contains 'below the floor it keeps the newest day' "$big" 'NEWESTBIG'
+assert_contains 'below the floor it walks back to the previous day' "$big" 'MIDDAY'
+assert_absent 'the walk stops at the calendar bound, not at the floor' "$big" 'ANCIENT'
+
+# --- at or above the floor, it does NOT walk back --------------------------
+tight=$("$subject" --cwd /work/proj --min-bytes "$newest_day_bytes" --max-days 30 2>/dev/null)
+assert_contains 'at the floor it keeps the newest day' "$tight" 'NEWESTBIG'
+assert_absent 'at the floor it does not reach back' "$tight" 'MIDDAY'
+
+# --- max-days bounds the walk even when still under the floor --------------
+bounded=$("$subject" --cwd /work/proj --min-bytes 99999999 --max-days 2 2>/dev/null)
+assert_contains 'a bounded walk still includes the newest day' "$bounded" 'NEWESTBIG'
+assert_absent 'the day span bound stops the walk' "$bounded" 'ANCIENT'
+
+# --- --list is a survey, not content ---------------------------------------
+listed=$("$subject" --cwd /work/proj --list 2>/dev/null)
+assert_contains '--list names a session' "$listed" 'sess-newest-big'
+assert_contains '--list shows the day' "$listed" '2026-07-30'
+assert_absent '--list does not dump conversation content' "$listed" 'NEWESTBIG turn 1'
+
+# --- --session pins one session exactly ------------------------------------
+pinned=$("$subject" --cwd /work/proj --session sess-midday 2>/dev/null)
+assert_contains '--session selects the named session' "$pinned" 'MIDDAY'
+assert_absent '--session excludes every other session' "$pinned" 'NEWESTBIG'
+
+# --- unknown project is a clear error, not empty output --------------------
+miss_err=$("$subject" --cwd /nowhere/at/all 2>&1)
+miss_rc=$?
+if [ "$miss_rc" -ne 0 ]; then
+	pass 'a cwd with no transcripts is an error'
+else
+	fail 'a cwd with no transcripts is an error'
+fi
+assert_contains 'the error names the cwd it looked for' "$miss_err" '/nowhere/at/all'
+
+# --- CLI surface ------------------------------------------------------------
+help_out=$("$subject" --help 2>&1)
+if [ $? -eq 0 ] && [ -n "$help_out" ]; then
+	pass '--help succeeds'
+else
+	fail '--help succeeds'
+fi
+about_lines=$("$subject" --about 2>&1 | wc -l)
+if [ "$about_lines" -eq 1 ]; then
+	pass '--about prints exactly one line'
+else
+	fail "--about prints exactly one line (got $about_lines)"
+fi
+
+# --- provenance: the output must say what it was built from ----------------
+assert_contains 'output declares it was reconstructed' "$out" 'econstructed'
+assert_contains 'output names the source sessions' "$out" 'sess-newest-big'
+
+exit "$failures"

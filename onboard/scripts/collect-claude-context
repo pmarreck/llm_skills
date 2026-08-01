@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+#
+# Select the session transcripts worth reconstructing for a given cwd, reduce
+# them, and emit one document ready to hand to a summarising subagent.
+#
+# Selection is day-anchored rather than session-anchored: the most recent
+# session is very often a trivial two-message one, so anchoring there would
+# reconstruct almost nothing. Anchor on the most recent DAY that had
+# conversation, take everything from it, and walk backwards a day at a time
+# only while the accumulated REDUCED text is under a floor. Raw file size is
+# the wrong yardstick — it is dominated by tool payloads, which is exactly what
+# the reducer throws away.
+
+set -u
+
+PROG="collect-claude-context"
+VERSION="0.1.0"
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REDUCER="$HERE/reduce-claude-transcript"
+
+PROJECTS_DIR="${ONBOARD_PROJECTS_DIR:-$HOME/.claude/projects}"
+CWD="$PWD"
+MIN_BYTES=5000
+MAX_DAYS=7
+MODE=collect
+PIN=""
+KEEP_THINKING=""
+
+usage() {
+	cat <<EOF
+$PROG — gather and reduce the Claude sessions worth onboarding from
+
+USAGE
+  $PROG [options]
+
+OPTIONS
+  --cwd <path>          project directory to onboard into (default: \$PWD)
+  --list                survey candidate sessions instead of emitting content
+  --session <id>        pin exactly one session (by file stem)
+  --min-bytes <n>       reduced-text floor before walking back a day (default $MIN_BYTES)
+  --max-days <n>        how far back the walk may reach (default $MAX_DAYS)
+  --keep-thinking       pass through to the reducer
+  -h, --help            this help
+      --about           one-line version banner
+
+ENVIRONMENT
+  ONBOARD_PROJECTS_DIR  transcript root (default ~/.claude/projects)
+
+EXIT
+  0 ok   1 usage   2 no transcripts for this cwd
+EOF
+}
+
+die() { printf '%s: %s\n' "$PROG" "$2" >&2; exit "$1"; }
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--cwd) shift; CWD="${1:-}" ;;
+		--list) MODE=list ;;
+		--session) shift; PIN="${1:-}" ;;
+		--min-bytes) shift; MIN_BYTES="${1:-}" ;;
+		--max-days) shift; MAX_DAYS="${1:-}" ;;
+		--keep-thinking) KEEP_THINKING="--keep-thinking" ;;
+		-h|--help) usage; exit 0 ;;
+		--about) printf '%s %s (bash, %s)\n' "$PROG" "$VERSION" "$(uname -sm | tr ' ' '-')"; exit 0 ;;
+		*) die 1 "unknown option: $1" ;;
+	esac
+	shift
+done
+
+[ -x "$REDUCER" ] || die 2 "reducer not found or not executable: $REDUCER"
+
+# Claude names each project directory after the cwd with '/' replaced by '-',
+# which gives the cwd -> sessions mapping for free.
+slug=$(printf '%s' "$CWD" | tr '/' '-')
+dir="$PROJECTS_DIR/$slug"
+
+[ -d "$dir" ] || die 2 "no transcripts for cwd $CWD (looked in $dir)"
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/onboard-collect-work.XXXXXX")
+trap 'rm -rf -- "$work"' EXIT
+
+# Build an index: <day> <mtime> <reduced-bytes> <stem> <path>
+# The day comes from the LAST record's timestamp, so a session that ran past
+# midnight is attributed to the day it finished — which is the day a reader
+# would call it.
+index="$work/index"
+: > "$index"
+
+for f in "$dir"/*.jsonl; do
+	[ -f "$f" ] || continue
+	stem=$(basename -- "$f" .jsonl)
+	red="$work/$stem.md"
+	"$REDUCER" $KEEP_THINKING "$f" -o "$red" 2>/dev/null || continue
+	[ -s "$red" ] || continue
+	day=$(grep -oE '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$red" | tail -1 | awk '{print $2}')
+	[ -n "$day" ] || continue
+	bytes=$(wc -c < "$red" | tr -d ' ')
+	printf '%s\t%s\t%s\t%s\n' "$day" "$bytes" "$stem" "$f" >> "$index"
+done
+
+[ -s "$index" ] || die 2 "no usable transcripts for cwd $CWD (looked in $dir)"
+
+if [ "$MODE" = list ]; then
+	printf '%-12s %10s  %s\n' DAY REDUCED SESSION
+	sort -r "$index" | while IFS=$'\t' read -r day bytes stem _; do
+		printf '%-12s %10s  %s\n' "$day" "$bytes" "$stem"
+	done
+	exit 0
+fi
+
+selected="$work/selected"
+: > "$selected"
+
+if [ -n "$PIN" ]; then
+	awk -F'\t' -v p="$PIN" '$3 == p' "$index" > "$selected"
+	[ -s "$selected" ] || die 2 "no session named $PIN for cwd $CWD"
+else
+	# Days, newest first.
+	days=$(cut -f1 "$index" | sort -ru)
+	newest_day=$(printf '%s\n' "$days" | head -1)
+	total=0
+	span=0
+	for day in $days; do
+		# Bound the walk by calendar distance from the anchor, not by day count,
+		# so a gap of idle days cannot silently drag in months-old work.
+		if [ "$day" != "$newest_day" ]; then
+			d1=$(date -d "$newest_day" +%s 2>/dev/null || printf 0)
+			d2=$(date -d "$day" +%s 2>/dev/null || printf 0)
+			span=$(( (d1 - d2) / 86400 ))
+			[ "$span" -ge "$MAX_DAYS" ] && break
+			[ "$total" -ge "$MIN_BYTES" ] && break
+		fi
+		awk -F'\t' -v d="$day" '$1 == d' "$index" >> "$selected"
+		total=$(awk -F'\t' '{s += $2} END {print s + 0}' "$selected")
+	done
+fi
+
+sessions=$(cut -f3 "$selected" | paste -sd', ' -)
+days_used=$(cut -f1 "$selected" | sort -u | paste -sd', ' -)
+count=$(wc -l < "$selected" | tr -d ' ')
+total=$(awk -F'\t' '{s += $2} END {print s + 0}' "$selected")
+
+cat <<EOF
+# Onboarding context for \`$CWD\`
+
+Reconstructed from $count session transcript(s) by \`$PROG\`, not written by the
+session that did the work. Decisions, tool calls, file paths and the user's own
+words are recovered; what the previous agent was *about to do next*, and the
+unstated judgement behind it, are INFERRED and must be labelled as such.
+
+- days covered: $days_used
+- sessions: $sessions
+- reduced size: $total B
+- transcript root: \`$PROJECTS_DIR/$slug\`
+
+EOF
+
+sort -r "$selected" | while IFS=$'\t' read -r day bytes stem _; do
+	printf -- '---\n\n# Session %s (%s, %s B reduced)\n\n' "$stem" "$day" "$bytes"
+	cat "$work/$stem.md"
+	printf '\n'
+done

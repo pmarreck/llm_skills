@@ -75,4 +75,11 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_onboard_collect"; then
+	printf 'PASS: onboard session collection\n'
+else
+	printf 'FAIL: onboard session collection\n' >&2
+	failures=$((failures + 1))
+fi
+
 exit "$failures"
