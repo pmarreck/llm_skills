@@ -68,4 +68,11 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_onboard_reducer"; then
+	printf 'PASS: onboard transcript reducer\n'
+else
+	printf 'FAIL: onboard transcript reducer\n' >&2
+	failures=$((failures + 1))
+fi
+
 exit "$failures"

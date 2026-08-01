@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+
+# Prove the Claude transcript reducer is a REDUCTION, not a transcription, and
+# that its record filter behaves as a classifier over the whole record set:
+# every human turn survives (sensitivity) and no bookkeeping type or oversized
+# tool payload leaks (specificity). An unrecognised record type must fail LOUDLY
+# — that is exactly how a schema change becomes silent data loss.
+
+set -u
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+subject="$ROOT/onboard/scripts/reduce-claude-transcript"
+failures=0
+sandbox=$(mktemp -d "${TMPDIR:-/tmp}/onboard-reducer.XXXXXX")
+
+cleanup() {
+	case "$sandbox" in
+		"${TMPDIR:-/tmp}"/onboard-reducer.*) rm -rf -- "$sandbox" ;;
+	esac
+}
+trap cleanup EXIT
+
+pass() { printf 'PASS: %s\n' "$1"; }
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_contains() {
+	local label="$1" haystack="$2" needle="$3"
+	case "$haystack" in
+		*"$needle"*) pass "$label" ;;
+		*) fail "$label"; printf '  missing: %q\n' "$needle" >&2 ;;
+	esac
+}
+
+assert_absent() {
+	local label="$1" haystack="$2" needle="$3"
+	case "$haystack" in
+		*"$needle"*) fail "$label"; printf '  leaked: %q\n' "$needle" >&2 ;;
+		*) pass "$label" ;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+# Fixture: one synthetic transcript exercising every record type observed in a
+# live session on 2026-07-31, plus the three user-record variants that the
+# naive "array content means tool result" rule gets wrong.
+# ---------------------------------------------------------------------------
+
+transcript="$sandbox/session.jsonl"
+
+emit() { printf '%s\n' "$1" >> "$transcript"; }
+
+# -- real human turns (promptSource typed/queued) ---------------------------
+emit '{"type":"user","timestamp":"2026-07-31T10:00:00.000Z","sessionId":"abc-123","cwd":"/work/proj","gitBranch":"yolo","promptSource":"typed","message":{"role":"user","content":"FIRSTHUMANTURN please port the parser"}}'
+emit '{"type":"user","timestamp":"2026-07-31T10:31:00.000Z","sessionId":"abc-123","cwd":"/work/proj","gitBranch":"yolo","promptSource":"queued","message":{"role":"user","content":"SECONDHUMANTURN also standardise the runner"}}'
+# a human turn carrying an injected reminder that must be stripped from the text
+emit '{"type":"user","timestamp":"2026-07-31T10:45:00.000Z","sessionId":"abc-123","cwd":"/work/proj","gitBranch":"yolo","promptSource":"typed","message":{"role":"user","content":"THIRDHUMANTURN ship it\n<system-reminder>REMINDERNOISE do not surface this</system-reminder>"}}'
+
+# -- system-injected turn: kept, but labelled distinctly, never as a human ----
+emit '{"type":"user","timestamp":"2026-07-31T10:50:00.000Z","sessionId":"abc-123","promptSource":"system","message":{"role":"user","content":"<task-notification>SYSTEMINJECTED agent finished</task-notification>"}}'
+
+# -- assistant prose + thinking + tool_use ----------------------------------
+emit '{"type":"assistant","timestamp":"2026-07-31T10:01:00.000Z","sessionId":"abc-123","message":{"role":"assistant","content":[{"type":"thinking","thinking":"THINKINGNOISE internal deliberation"},{"type":"text","text":"ASSISTANTPROSE the reducer keeps conclusions."},{"type":"tool_use","name":"Bash","input":{"command":"git status --short","description":"check tree"}}]}}'
+emit '{"type":"assistant","timestamp":"2026-07-31T10:02:00.000Z","sessionId":"abc-123","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/work/proj/src/main.zig"}}]}}'
+
+# -- tool results: payload must be truncated, outcome must survive ----------
+emit '{"type":"user","timestamp":"2026-07-31T10:01:30.000Z","sessionId":"abc-123","toolUseResult":{"stdout":"ok"},"sourceToolAssistantUUID":"u1","message":{"role":"user","content":[{"type":"tool_result","content":"PAYLOADLINE001\nPAYLOADLINE002\nPAYLOADLINE003\nPAYLOADLINE004\nPAYLOADLINE005\nPAYLOADLINE006\nPAYLOADLINE007\nPAYLOADLINE008\nPAYLOADLINE009\nPAYLOADLINE010\nPAYLOADLINE011\nPAYLOADLINE012"}]}}'
+emit '{"type":"user","timestamp":"2026-07-31T10:02:30.000Z","sessionId":"abc-123","toolUseResult":{"stdout":""},"sourceToolAssistantUUID":"u2","message":{"role":"user","content":[{"type":"tool_result","is_error":true,"content":"ERRORFIRSTLINE permission denied\nERRORSECONDLINE stack trace"}]}}'
+
+# -- skill-body injection: user record whose content is an ARRAY OF TEXT.
+#    The naive rule calls this a human turn. It is not.
+emit '{"type":"user","timestamp":"2026-07-31T10:03:00.000Z","sessionId":"abc-123","sourceToolAssistantUUID":"u3","message":{"role":"user","content":[{"type":"text","text":"SKILLBODYINJECTION Base directory for this skill: /skills/example"}]}}'
+
+# -- pure bookkeeping: every one of these must vanish ------------------------
+emit '{"type":"attachment","timestamp":"2026-07-31T10:04:00.000Z","attachment":{"content":"ATTACHNOISE injected file body"}}'
+emit '{"type":"mode","timestamp":"2026-07-31T10:04:01.000Z","mode":"MODENOISE"}'
+emit '{"type":"ai-title","timestamp":"2026-07-31T10:04:02.000Z","title":"TITLENOISE"}'
+emit '{"type":"last-prompt","timestamp":"2026-07-31T10:04:03.000Z","prompt":"PROMPTNOISE"}'
+emit '{"type":"queue-operation","timestamp":"2026-07-31T10:04:04.000Z","op":"QUEUENOISE"}'
+emit '{"type":"file-history-snapshot","timestamp":"2026-07-31T10:04:05.000Z","snapshot":"SNAPNOISE"}'
+emit '{"type":"file-history-delta","timestamp":"2026-07-31T10:04:06.000Z","delta":"DELTANOISE"}'
+emit '{"type":"permission-mode","timestamp":"2026-07-31T10:04:07.000Z","permissionMode":"PERMNOISE"}'
+emit '{"type":"system","timestamp":"2026-07-31T10:04:08.000Z","content":"SYSTEMNOISE hook fired"}'
+emit '{"type":"custom-title","customTitle":"CUSTOMTITLENOISE","sessionId":"abc-123"}'
+emit '{"type":"agent-name","agentName":"AGENTNAMENOISE","sessionId":"abc-123"}'
+emit '{"type":"bridge-session","sessionId":"abc-123","bridgeSessionId":"BRIDGENOISE","lastSequenceNum":0}'
+
+# -- pr-link carries real provenance and must SURVIVE ------------------------
+emit '{"type":"pr-link","timestamp":"2026-07-31T10:05:00.000Z","sessionId":"abc-123","prNumber":308,"prUrl":"https://example.invalid/acme/widget/pull/308","prRepository":"acme/widget"}'
+
+if [ ! -x "$subject" ]; then
+	fail "reducer exists and is executable at onboard/scripts/reduce-claude-transcript"
+	printf '  (all remaining assertions skipped)\n' >&2
+	exit 1
+fi
+
+out=$("$subject" "$transcript" 2>"$sandbox/err")
+rc=$?
+err=$(cat "$sandbox/err")
+
+if [ "$rc" -eq 0 ]; then
+	pass 'reducer exits 0 on a well-formed transcript'
+else
+	fail 'reducer exits 0 on a well-formed transcript'
+	printf '  stderr: %s\n' "$err" >&2
+fi
+
+if [ -z "$err" ]; then
+	pass 'reducer keeps stderr clean on success'
+else
+	fail 'reducer keeps stderr clean on success'
+	printf '  stderr: %s\n' "$err" >&2
+fi
+
+# --- SENSITIVITY: every human turn survives, verbatim ----------------------
+assert_contains 'human turn 1 survives verbatim' "$out" 'FIRSTHUMANTURN please port the parser'
+assert_contains 'human turn 2 survives verbatim' "$out" 'SECONDHUMANTURN also standardise the runner'
+assert_contains 'human turn 3 survives verbatim' "$out" 'THIRDHUMANTURN ship it'
+assert_contains 'assistant prose survives' "$out" 'ASSISTANTPROSE the reducer keeps conclusions.'
+assert_contains 'system-injected turn is kept' "$out" 'SYSTEMINJECTED agent finished'
+
+# --- the system-injected turn must NOT be labelled as a human turn ---------
+human_count=$(printf '%s\n' "$out" | grep -c '^## .*USER$')
+if [ "$human_count" -eq 3 ]; then
+	pass 'exactly the three human turns are labelled USER'
+else
+	fail "exactly the three human turns are labelled USER (got $human_count)"
+fi
+
+# --- tool invocations reduce to one line: name + target + outcome ----------
+assert_contains 'tool invocation records the tool name' "$out" 'Bash'
+assert_contains 'tool invocation records the target command' "$out" 'git status --short'
+assert_contains 'tool invocation records the edited path' "$out" '/work/proj/src/main.zig'
+assert_contains 'failing tool result keeps its first error line' "$out" 'ERRORFIRSTLINE permission denied'
+
+# --- SPECIFICITY: bookkeeping and payloads never leak ----------------------
+for noise in ATTACHNOISE MODENOISE TITLENOISE PROMPTNOISE QUEUENOISE \
+	SNAPNOISE DELTANOISE PERMNOISE SYSTEMNOISE SKILLBODYINJECTION \
+	REMINDERNOISE THINKINGNOISE CUSTOMTITLENOISE AGENTNAMENOISE BRIDGENOISE; do
+	assert_absent "bookkeeping/injected content dropped: $noise" "$out" "$noise"
+done
+
+# --- tool payloads truncated to a bound, with an elision marker ------------
+payload_lines=$(printf '%s\n' "$out" | grep -c 'PAYLOADLINE')
+if [ "$payload_lines" -le 4 ]; then
+	pass "tool result payload truncated (kept $payload_lines lines)"
+else
+	fail "tool result payload truncated (kept $payload_lines lines, want <= 4)"
+fi
+assert_absent 'payload truncation drops the tail' "$out" 'PAYLOADLINE012'
+
+# --- thinking is opt-in ----------------------------------------------------
+kept=$("$subject" --keep-thinking "$transcript" 2>/dev/null)
+assert_contains 'thinking is recoverable via --keep-thinking' "$kept" 'THINKINGNOISE internal deliberation'
+
+# --- REDUCTION RATIO: the whole point ---------------------------------------
+in_bytes=$(wc -c < "$transcript")
+out_bytes=$(printf '%s' "$out" | wc -c)
+if [ "$out_bytes" -gt 0 ] && [ $((in_bytes / out_bytes)) -ge 2 ]; then
+	pass "output is a reduction (${in_bytes}B in, ${out_bytes}B out)"
+else
+	fail "output is a reduction (${in_bytes}B in, ${out_bytes}B out, want >=2x)"
+fi
+
+# --- header carries provenance ---------------------------------------------
+assert_contains 'header names the session id' "$out" 'abc-123'
+assert_contains 'header names the cwd' "$out" '/work/proj'
+assert_contains 'header names the branch' "$out" 'yolo'
+assert_contains 'header reports the reduction ratio' "$out" 'reduction'
+
+# --- output must be clean text: no ANSI, no stray control bytes ------------
+# Real tool output is full of terminal colour codes and the occasional NUL.
+# Measured 2026-07-31: 52 of 120 live transcripts leaked control bytes into the
+# reduced output. Output is read by a human and fed to a subagent; both want
+# text, and the CLI rule is that output is 100% UTF-8.
+ctl="$sandbox/ctl.jsonl"
+printf '%s\n' \
+	'{"type":"user","timestamp":"2026-07-31T10:00:00.000Z","sessionId":"c-1","promptSource":"typed","message":{"role":"user","content":"CTLHUMAN run the build"}}' \
+	'{"type":"assistant","timestamp":"2026-07-31T10:00:01.000Z","sessionId":"c-1","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"./build"}}]}}' \
+	'{"type":"user","timestamp":"2026-07-31T10:00:02.000Z","sessionId":"c-1","sourceToolAssistantUUID":"u1","message":{"role":"user","content":[{"type":"tool_result","content":"[32mGREENTEXT ok[0m  CTLTAIL"}]}}' \
+	> "$ctl"
+ctl_out=$("$subject" "$ctl" 2>/dev/null)
+ctl_bad=$(printf '%s' "$ctl_out" | tr -d '\11\12\15\40-\176\200-\377' | wc -c)
+if [ "$ctl_bad" -eq 0 ]; then
+	pass 'reduced output contains no stray control bytes'
+else
+	fail "reduced output contains no stray control bytes (found $ctl_bad)"
+fi
+assert_absent 'ANSI colour sequences are stripped' "$ctl_out" '[32m'
+assert_contains 'stripping ANSI keeps the visible text' "$ctl_out" 'GREENTEXT ok'
+assert_contains 'text after a control byte is preserved' "$ctl_out" 'CTLTAIL'
+
+# --- pr-link is provenance, not noise: it must survive ---------------------
+assert_contains 'pr-link URL survives as provenance' "$out" 'https://example.invalid/acme/widget/pull/308'
+
+# --- a workflow journal is the WRONG FILE, not schema drift -----------------
+# ~/.claude/projects also holds subagents/workflows/*/journal.jsonl, whose
+# records are {started,result}. Reporting those as "unknown record type" would
+# send a reader hunting a schema change that never happened.
+journal="$sandbox/journal.jsonl"
+printf '%s\n' \
+	'{"type":"started","key":"v2:deadbeef","agentId":"a1"}' \
+	'{"type":"result","key":"v2:deadbeef","agentId":"a1"}' > "$journal"
+jr_out=$("$subject" "$journal" 2>"$sandbox/jerr")
+jr_rc=$?
+jr_err=$(cat "$sandbox/jerr")
+if [ "$jr_rc" -ne 0 ]; then
+	pass 'a non-transcript jsonl is rejected'
+else
+	fail 'a non-transcript jsonl is rejected'
+fi
+assert_contains 'rejection says it is not a session transcript' "$jr_err" 'not a session transcript'
+assert_absent 'a non-transcript is NOT misreported as schema drift' "$jr_err" 'unknown record type'
+
+# --- UNKNOWN RECORD TYPE MUST FAIL LOUDLY ----------------------------------
+drifted="$sandbox/drifted.jsonl"
+cp -- "$transcript" "$drifted"
+printf '%s\n' '{"type":"brand-new-2027-type","timestamp":"2026-07-31T11:00:00.000Z","x":1}' >> "$drifted"
+drift_out=$("$subject" "$drifted" 2>"$sandbox/drifterr")
+drift_rc=$?
+drift_err=$(cat "$sandbox/drifterr")
+if [ "$drift_rc" -ne 0 ]; then
+	pass 'unknown record type is a hard failure, not a silent skip'
+else
+	fail 'unknown record type is a hard failure, not a silent skip'
+fi
+assert_contains 'unknown record type is named on stderr' "$drift_err" 'brand-new-2027-type'
+
+# --- CLI surface ------------------------------------------------------------
+help_out=$("$subject" --help 2>&1)
+help_rc=$?
+if [ "$help_rc" -eq 0 ] && [ -n "$help_out" ]; then
+	pass '--help succeeds and prints usage'
+else
+	fail '--help succeeds and prints usage'
+fi
+
+about_out=$("$subject" --about 2>&1)
+about_rc=$?
+about_lines=$(printf '%s\n' "$about_out" | wc -l)
+if [ "$about_rc" -eq 0 ] && [ "$about_lines" -eq 1 ]; then
+	pass '--about prints exactly one line'
+else
+	fail "--about prints exactly one line (got $about_lines)"
+fi
+
+stdin_out=$("$subject" - < "$transcript" 2>/dev/null)
+assert_contains 'reads a transcript from stdin via -' "$stdin_out" 'FIRSTHUMANTURN'
+stdin_out2=$("$subject" @stdin < "$transcript" 2>/dev/null)
+assert_contains 'reads a transcript from stdin via @stdin' "$stdin_out2" 'FIRSTHUMANTURN'
+
+spaced="$sandbox/a path with spaces.jsonl"
+cp -- "$transcript" "$spaced"
+spaced_out=$("$subject" "$spaced" 2>/dev/null)
+assert_contains 'accepts a path containing spaces' "$spaced_out" 'FIRSTHUMANTURN'
+
+missing_err=$("$subject" "$sandbox/does-not-exist.jsonl" 2>&1)
+missing_rc=$?
+if [ "$missing_rc" -ne 0 ]; then
+	pass 'a missing transcript is an error, not empty output'
+else
+	fail 'a missing transcript is an error, not empty output'
+fi
+
+exit "$failures"

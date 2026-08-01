@@ -1,0 +1,517 @@
+#!/usr/bin/env luajit
+-- Reduce a Claude Code session transcript (.jsonl) to a readable Markdown
+-- digest, typically 1-2 orders of magnitude smaller than the raw file.
+--
+-- Intent: `onboard` reconstructs a dead session's context from its transcript,
+-- but feeding the raw file to a summarising subagent would blow the very
+-- context being seeded. This stage is a REDUCTION and contains no LLM: it keeps
+-- human turns verbatim, assistant prose, and one line per tool call, and drops
+-- harness bookkeeping and tool payloads.
+--
+-- Technique: streaming line-oriented NDJSON parse with a whitelist classifier
+-- over record types. An unrecognised type is a hard error rather than a silent
+-- skip, because a schema change that silently drops records is indistinguishable
+-- from a quiet session.
+
+local VERSION = "0.1.0"
+local PROG = "reduce-claude-transcript"
+
+-- ===========================================================================
+-- Minimal JSON decoder. LuaJIT ships none, and shelling out to jq per line
+-- costs a process per record over files that reach several megabytes.
+-- ===========================================================================
+
+local json = {}
+
+local escape_map = {
+	['"'] = '"', ["\\"] = "\\", ["/"] = "/",
+	b = "\b", f = "\f", n = "\n", r = "\r", t = "\t",
+}
+
+local function utf8_encode(cp)
+	if cp < 0x80 then
+		return string.char(cp)
+	elseif cp < 0x800 then
+		return string.char(0xC0 + math.floor(cp / 0x40), 0x80 + (cp % 0x40))
+	elseif cp < 0x10000 then
+		return string.char(
+			0xE0 + math.floor(cp / 0x1000),
+			0x80 + (math.floor(cp / 0x40) % 0x40),
+			0x80 + (cp % 0x40))
+	end
+	return string.char(
+		0xF0 + math.floor(cp / 0x40000),
+		0x80 + (math.floor(cp / 0x1000) % 0x40),
+		0x80 + (math.floor(cp / 0x40) % 0x40),
+		0x80 + (cp % 0x40))
+end
+
+local parse_value
+
+local function skip_ws(s, i)
+	local _, j = s:find("^[ \t\r\n]*", i)
+	return j + 1
+end
+
+local function parse_string(s, i)
+	-- i points at the opening quote
+	i = i + 1
+	local parts, start = {}, i
+	while true do
+		local c = s:sub(i, i)
+		if c == "" then
+			error("unterminated string")
+		elseif c == '"' then
+			parts[#parts + 1] = s:sub(start, i - 1)
+			return table.concat(parts), i + 1
+		elseif c == "\\" then
+			parts[#parts + 1] = s:sub(start, i - 1)
+			local e = s:sub(i + 1, i + 1)
+			if e == "u" then
+				local hex = s:sub(i + 2, i + 5)
+				local cp = tonumber(hex, 16) or 0xFFFD
+				i = i + 6
+				if cp >= 0xD800 and cp <= 0xDBFF and s:sub(i, i + 1) == "\\u" then
+					local lo = tonumber(s:sub(i + 2, i + 5), 16)
+					if lo and lo >= 0xDC00 and lo <= 0xDFFF then
+						cp = 0x10000 + (cp - 0xD800) * 0x400 + (lo - 0xDC00)
+						i = i + 6
+					end
+				end
+				parts[#parts + 1] = utf8_encode(cp)
+			else
+				parts[#parts + 1] = escape_map[e] or e
+				i = i + 2
+			end
+			start = i
+		else
+			i = i + 1
+		end
+	end
+end
+
+local function parse_object(s, i)
+	local obj = {}
+	i = skip_ws(s, i + 1)
+	if s:sub(i, i) == "}" then return obj, i + 1 end
+	while true do
+		i = skip_ws(s, i)
+		local key; key, i = parse_string(s, i)
+		i = skip_ws(s, i)
+		i = i + 1 -- ':'
+		local val; val, i = parse_value(s, i)
+		obj[key] = val
+		i = skip_ws(s, i)
+		local c = s:sub(i, i)
+		if c == "," then i = i + 1
+		elseif c == "}" then return obj, i + 1
+		else error("malformed object near byte " .. i) end
+	end
+end
+
+local function parse_array(s, i)
+	local arr = {}
+	i = skip_ws(s, i + 1)
+	if s:sub(i, i) == "]" then return arr, i + 1 end
+	while true do
+		local val; val, i = parse_value(s, i)
+		arr[#arr + 1] = val
+		i = skip_ws(s, i)
+		local c = s:sub(i, i)
+		if c == "," then i = i + 1
+		elseif c == "]" then return arr, i + 1
+		else error("malformed array near byte " .. i) end
+	end
+end
+
+parse_value = function(s, i)
+	i = skip_ws(s, i)
+	local c = s:sub(i, i)
+	if c == "{" then return parse_object(s, i) end
+	if c == "[" then return parse_array(s, i) end
+	if c == '"' then return parse_string(s, i) end
+	if s:sub(i, i + 3) == "true" then return true, i + 4 end
+	if s:sub(i, i + 4) == "false" then return false, i + 5 end
+	if s:sub(i, i + 3) == "null" then return nil, i + 4 end
+	local _, j, num = s:find("^(-?%d+%.?%d*[eE]?[-+]?%d*)", i)
+	if num then return tonumber(num), j + 1 end
+	error("unexpected token at byte " .. i)
+end
+
+function json.decode(s)
+	local ok, val = pcall(function()
+		local v = parse_value(s, 1)
+		return v
+	end)
+	if not ok then return nil, val end
+	return val
+end
+
+-- ===========================================================================
+-- Record classification. Whitelist: anything unlisted is a schema drift error.
+-- ===========================================================================
+
+-- `pr-link` is kept because it carries real provenance (the PR a session
+-- produced), which is exactly what an onboarding reader needs and cannot
+-- reconstruct from prose.
+local KEEP_TYPES = { user = true, assistant = true, ["pr-link"] = true }
+
+-- Only `user` and `assistant` constitute a conversation. A file carrying
+-- neither is not a session transcript at all.
+local CONVERSATION_TYPES = { user = true, assistant = true }
+
+-- Pure harness bookkeeping. Derived empirically from 245 live transcripts on
+-- 2026-07-31: `file-history-delta`, `permission-mode`, `custom-title`,
+-- `agent-name` and `bridge-session` were all absent from the original design
+-- note, and are precisely the drift this whitelist exists to surface.
+local DROP_TYPES = {
+	["agent-name"] = true,
+	attachment = true,
+	["ai-title"] = true,
+	["bridge-session"] = true,
+	["custom-title"] = true,
+	["file-history-delta"] = true,
+	["file-history-snapshot"] = true,
+	["last-prompt"] = true,
+	mode = true,
+	["permission-mode"] = true,
+	["queue-operation"] = true,
+	system = true,
+	summary = true,
+	["x-claude-mem-index"] = true,
+}
+
+-- A human turn is identified by promptSource, NOT by whether message.content is
+-- an array. Both edges of that naive rule are wrong: skill bodies arrive as
+-- user records with an ARRAY of text blocks, and some genuine turns are plain
+-- strings. Measured on a live session: 662 user records, of which 49 are human.
+local HUMAN_SOURCES = { typed = true, queued = true }
+
+-- ===========================================================================
+
+local function usage()
+	return ([[
+%s — reduce a Claude Code session transcript to a readable digest
+
+USAGE
+  %s [options] <transcript.jsonl|-|@stdin>
+
+OPTIONS
+  -o, --output <path|-|@stdout|@stderr>   where to write (default stdout)
+      --keep-thinking                     retain assistant thinking blocks
+      --max-payload-lines <n>             tool-output lines to keep (default 3)
+      --no-header                         omit the provenance header
+  -h, --help                              this help
+      --about                             one-line version banner
+
+EXIT
+  0 ok   1 usage   2 unreadable input   3 unknown record type (schema drift)
+]]):format(PROG, PROG)
+end
+
+local function die(code, msg)
+	io.stderr:write(PROG .. ": " .. msg .. "\n")
+	os.exit(code)
+end
+
+-- Tool output is full of terminal colour codes and the occasional NUL, and this
+-- text is both read by a human and fed to a subagent. Strip complete ANSI
+-- sequences first (so their visible payload survives), then drop any remaining
+-- C0/DEL byte except tab and newline.
+local function sanitize(text)
+	if not text or text == "" then return "" end
+	text = text:gsub("\27%[[0-9;?]*[ -/]*[@-~]", "")   -- CSI
+	text = text:gsub("\27%][^\7\27]*[\7]", "")          -- OSC terminated by BEL
+	text = text:gsub("\27%][^\27]*\27\\", "")           -- OSC terminated by ST
+	text = text:gsub("\27[@-Z\\-_]", "")                -- remaining Fe escapes
+	text = text:gsub("\r\n", "\n"):gsub("\r", "\n")
+	text = text:gsub("[%z\1-\8\11\12\14-\31\127]", "")
+	return text
+end
+
+local function strip_reminders(text)
+	if not text then return "" end
+	-- Injected reminders are already present in the new session; re-emitting
+	-- them wastes exactly the context this tool exists to conserve.
+	text = text:gsub("<system%-reminder>.-</system%-reminder>", "")
+	text = text:gsub("<task%-notification>(.-)</task%-notification>", "%1")
+	text = text:gsub("^%s+", ""):gsub("%s+$", "")
+	return text
+end
+
+local function first_line(s)
+	return (s:gsub("\r", ""):match("^[^\n]*")) or ""
+end
+
+-- Pick the most informative field of a tool_use input for a one-line summary.
+local TARGET_KEYS = {
+	"command", "file_path", "path", "notebook_path", "url",
+	"pattern", "query", "skill", "description", "prompt",
+}
+
+local function tool_target(input)
+	if type(input) ~= "table" then return "" end
+	for _, k in ipairs(TARGET_KEYS) do
+		local v = input[k]
+		if type(v) == "string" and v ~= "" then
+			v = v:gsub("%s+", " ")
+			if #v > 160 then v = v:sub(1, 157) .. "..." end
+			return v
+		end
+	end
+	return ""
+end
+
+local function result_text(content)
+	if type(content) == "string" then return content end
+	if type(content) == "table" then
+		local parts = {}
+		for _, b in ipairs(content) do
+			if type(b) == "table" and b.text then parts[#parts + 1] = b.text end
+		end
+		return table.concat(parts, "\n")
+	end
+	return ""
+end
+
+-- ===========================================================================
+
+local opts = {
+	output = "-",
+	keep_thinking = false,
+	max_payload_lines = 3,
+	header = true,
+}
+local input_path
+
+local argv, ai = { ... }, 1
+while ai <= #argv do
+	local a = argv[ai]
+	if a == "-h" or a == "--help" then
+		io.write(usage()); os.exit(0)
+	elseif a == "--about" then
+		io.write(("%s %s (luajit, %s-%s)\n"):format(PROG, VERSION, jit.os, jit.arch))
+		os.exit(0)
+	elseif a == "-o" or a == "--output" then
+		ai = ai + 1; opts.output = argv[ai] or die(1, "-o requires a value")
+	elseif a == "--keep-thinking" then
+		opts.keep_thinking = true
+	elseif a == "--no-header" then
+		opts.header = false
+	elseif a == "--max-payload-lines" then
+		ai = ai + 1
+		opts.max_payload_lines = tonumber(argv[ai]) or die(1, "--max-payload-lines requires a number")
+	elseif a == "--" then
+		ai = ai + 1; input_path = argv[ai]
+	elseif a:sub(1, 1) == "-" and a ~= "-" then
+		die(1, "unknown option: " .. a .. "\n" .. usage())
+	else
+		input_path = a
+	end
+	ai = ai + 1
+end
+
+if not input_path then die(1, "no input transcript given\n" .. usage()) end
+
+local raw
+if input_path == "-" or input_path == "@stdin" then
+	raw = io.read("*a")
+	input_path = "<stdin>"
+else
+	local fh, ferr = io.open(input_path, "rb")
+	if not fh then die(2, "cannot read " .. input_path .. ": " .. tostring(ferr)) end
+	raw = fh:read("*a")
+	fh:close()
+end
+if not raw or raw == "" then die(2, "empty transcript: " .. input_path) end
+
+-- Pass 1: parse and validate every record type before emitting anything, so a
+-- drift error cannot arrive halfway through a document that already looks fine.
+local records, unknown = {}, {}
+local lineno, conversation_records = 0, 0
+for line in (raw .. "\n"):gmatch("([^\n]*)\n") do
+	lineno = lineno + 1
+	if line:match("%S") then
+		local rec, derr = json.decode(line)
+		if not rec then
+			die(2, ("line %d: %s"):format(lineno, tostring(derr)))
+		end
+		local t = rec.type or "<missing>"
+		if CONVERSATION_TYPES[t] then conversation_records = conversation_records + 1 end
+		if not KEEP_TYPES[t] and not DROP_TYPES[t] then
+			unknown[t] = (unknown[t] or 0) + 1
+		end
+		records[#records + 1] = rec
+	end
+end
+
+-- Checked BEFORE the drift gate on purpose. `~/.claude/projects` also holds
+-- subagents/workflows/*/journal.jsonl ({started,result} records). Calling those
+-- a schema change would send a reader hunting a drift that never happened.
+if conversation_records == 0 then
+	die(2, ("not a session transcript (no user/assistant records in %d): %s")
+		:format(#records, input_path))
+end
+
+if next(unknown) then
+	local names = {}
+	for t, n in pairs(unknown) do names[#names + 1] = ("%s (x%d)"):format(t, n) end
+	table.sort(names)
+	die(3, "unknown record type(s), refusing to reduce: " .. table.concat(names, ", ")
+		.. "\n  the schema changed; update KEEP_TYPES/DROP_TYPES rather than skipping silently")
+end
+
+-- Pass 2: reduce.
+local body, kept, dropped = {}, 0, 0
+local session_id, cwd, branch, first_ts, last_ts
+
+local function push(s) body[#body + 1] = s end
+
+local function heading(ts, who)
+	push("")
+	push(("## %s — %s"):format(ts or "?", who))
+	push("")
+end
+
+for _, rec in ipairs(records) do
+	local t = rec.type
+	local ts = rec.timestamp
+	session_id = session_id or rec.sessionId
+	cwd = cwd or rec.cwd
+	branch = branch or rec.gitBranch
+	if ts then
+		first_ts = first_ts or ts
+		last_ts = ts
+	end
+
+	if t == "user" then
+		local src = rec.promptSource
+		local content = rec.message and rec.message.content
+		if HUMAN_SOURCES[src] then
+			local text = strip_reminders(type(content) == "string" and content or result_text(content))
+			if text ~= "" then
+				heading(ts, "USER")
+				push(text)
+				kept = kept + 1
+			else
+				dropped = dropped + 1
+			end
+		elseif src == "system" then
+			local text = strip_reminders(type(content) == "string" and content or result_text(content))
+			if text ~= "" then
+				heading(ts, "SYSTEM")
+				push(text)
+				kept = kept + 1
+			else
+				dropped = dropped + 1
+			end
+		elseif type(content) == "table" then
+			-- Tool results reduce to an outcome; skill-body injections (arrays of
+			-- text blocks with no tool_result) are dropped entirely.
+			local emitted = false
+			for _, block in ipairs(content) do
+				if type(block) == "table" and block.type == "tool_result" then
+					local text = result_text(block.content)
+					if block.is_error then
+						push(("  → ERROR: %s"):format(first_line(text)))
+					elseif text:match("%S") then
+						local n = 0
+						for l in text:gmatch("([^\n]*)\n?") do
+							if l:match("%S") then
+								n = n + 1
+								if n > opts.max_payload_lines then break end
+								push("  | " .. l)
+							end
+						end
+						local total = select(2, text:gsub("\n", "\n")) + 1
+						if total > opts.max_payload_lines then
+							push(("  | … %d more lines elided"):format(total - opts.max_payload_lines))
+						end
+					else
+						push("  → ok")
+					end
+					emitted = true
+				end
+			end
+			if emitted then kept = kept + 1 else dropped = dropped + 1 end
+		else
+			dropped = dropped + 1
+		end
+
+	elseif t == "assistant" then
+		local content = rec.message and rec.message.content
+		local wrote_head = false
+		if type(content) == "table" then
+			for _, block in ipairs(content) do
+				local bt = type(block) == "table" and block.type
+				if bt == "text" and block.text and block.text:match("%S") then
+					if not wrote_head then heading(ts, "ASSISTANT"); wrote_head = true end
+					push(strip_reminders(block.text))
+					kept = kept + 1
+				elseif bt == "thinking" and opts.keep_thinking and block.thinking then
+					if not wrote_head then heading(ts, "ASSISTANT"); wrote_head = true end
+					push("> (thinking) " .. block.thinking:gsub("\n", "\n> "))
+					kept = kept + 1
+				elseif bt == "tool_use" then
+					if not wrote_head then heading(ts, "ASSISTANT"); wrote_head = true end
+					local target = tool_target(block.input)
+					if target ~= "" then
+						push(("- **%s** `%s`"):format(block.name or "?", target))
+					else
+						push(("- **%s**"):format(block.name or "?"))
+					end
+					kept = kept + 1
+				else
+					dropped = dropped + 1
+				end
+			end
+		end
+
+	elseif t == "pr-link" then
+		heading(ts, "EVENT")
+		push(("Pull request opened: %s (%s#%s)"):format(
+			rec.prUrl or "?", rec.prRepository or "?", tostring(rec.prNumber or "?")))
+		kept = kept + 1
+
+	else
+		dropped = dropped + 1
+	end
+end
+
+local body_text = table.concat(body, "\n"):gsub("^\n+", "") .. "\n"
+
+local out = {}
+if opts.header then
+	local in_bytes = #raw
+	local out_bytes = #body_text
+	local ratio = out_bytes > 0 and (in_bytes / out_bytes) or 0
+	out[#out + 1] = "# Reduced session transcript"
+	out[#out + 1] = ""
+	out[#out + 1] = ("- source: `%s`"):format(input_path)
+	if session_id then out[#out + 1] = ("- session: `%s`"):format(session_id) end
+	if cwd then out[#out + 1] = ("- cwd: `%s`"):format(cwd) end
+	if branch then out[#out + 1] = ("- branch: `%s`"):format(branch) end
+	if first_ts then out[#out + 1] = ("- span: %s → %s"):format(first_ts, last_ts or first_ts) end
+	out[#out + 1] = ("- records: %d read, %d kept, %d dropped"):format(#records, kept, dropped)
+	out[#out + 1] = ("- reduction: %.1fx (%d B → %d B)"):format(ratio, in_bytes, out_bytes)
+	out[#out + 1] = ""
+	out[#out + 1] = "Reconstructed from a transcript. What the session *intended to do next* is"
+	out[#out + 1] = "inferred, never stated; tool payloads are truncated."
+	out[#out + 1] = ""
+end
+out[#out + 1] = body_text
+
+-- Single chokepoint: nothing reaches a caller without passing this, so the
+-- "output is clean text" invariant cannot be bypassed by a new emit site.
+local text = sanitize(table.concat(out, "\n"))
+
+if opts.output == "-" or opts.output == "@stdout" then
+	io.write(text)
+elseif opts.output == "@stderr" then
+	io.stderr:write(text)
+else
+	local fh, werr = io.open(opts.output, "wb")
+	if not fh then die(2, "cannot write " .. opts.output .. ": " .. tostring(werr)) end
+	fh:write(text)
+	fh:close()
+end
