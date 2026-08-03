@@ -34,6 +34,7 @@
 				gitMinimal
 				gnugrep
 				gnused
+				luajit
 				ripgrep
 			];
 		in {
@@ -56,8 +57,8 @@
 							# The Linux build sandbox has no /usr/bin/env, so every
 							# `#!/usr/bin/env bash` script is unrunnable until its
 							# shebang is rewritten to a store path.
-							patchShebangs ./test ./install ./tests ./.githooks \
-								./memories/scripts
+							patchShebangs ./test ./install ./tests \
+								./memories/scripts ./onboard/scripts
 
 							# The suite writes sandboxes under TMPDIR and needs a
 							# writable HOME; the sandbox provides neither by default.
@@ -87,13 +88,11 @@
 							git add -A
 							git commit -qm "sandbox checkout"
 
-							# about-peter/SKILL.md is deliberately a dangling symlink
-							# into the sibling PRIVATE llm-skills-private repo, which
-							# by design is absent here. Stand up a placeholder sibling
-							# so CI mirrors a provisioned machine. The warn-and-skip
-							# path for a genuinely unmaterializable skill keeps its own
-							# dedicated coverage in test_codex_sync's fixtures, so
-							# nothing is lost by satisfying this one.
+							# about-peter is deliberately a directory symlink into the
+							# sibling PRIVATE llm-skills-private repo, which by design is
+							# absent here. Stand up a placeholder sibling with a real
+							# SKILL.md so CI mirrors a provisioned machine; Codex follows
+							# skill-directory links but rejects a symlinked SKILL.md file.
 							mkdir -p ../llm-skills-private/about-peter
 							printf '%s\n' \
 								'---' \

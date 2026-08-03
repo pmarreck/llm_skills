@@ -1,19 +1,20 @@
 # Dirtree: Stateful directory trees in the CLI for humans and LLMs. https://github.com/pmarreck/dirtree
 ver=1.2
 annotate=[
-	.githooks = Repository-local Git hooks refresh materialized Codex skills after checkout or merge.
 	ADR.tsv = Fleet decision log (TSV, printable-binary encoded fields); adr-0001 documents its own format
 	MECHATRON_PRIME_CI.md = Portable Mechatron Prime CI target, webhook, and badge policy.
-	about-peter = Loads Peter's full personal context pack (career, finances, health, family, coaching) for person-level judgment.
+	PLAN.md = Active and recently completed work for the shared cross-agent skill repository.
+	about-peter = Directory symlink to the private about-peter skill whose SKILL.md remains outside this public repo.
 	capture-collaboration-evidence = Proactively identifies and records artifact-backed cases where human-agent synthesis beats either starting approach.
 	deep-code-review = Audit a codebase or major subsystem for quality and missed issues at project milestones.
 	dispatch = Dispatch background subagents for substantial tasks, fanning out parallel work with progress checkpointing.
 	erect-agent-stack = Stand up or join a project's agent stack — tmux session + remoted coding agent — in one idempotent command.
 	fix-zig-deps-hash = Fix nix build zigDeps/zigDepsHash mismatches after build.zig.zon dependency changes.
+	flake.nix = Pure Nix test environment declaring Bash, LuaJIT, and every suite tool and patched script interpreter.
 	handoff = Condense current dev state into a handoff doc conveying purpose and intent to the next agent.
 	i18n = Canonical i18n discipline: 50-locale set, compile-time enforcement, bilingual errors, RTL, --lang/--help conventions.
 	i18n/SKILL.md = Canonical opt-in i18n discipline: scope decision gate, 50 locales, enforcement, bilingual errors, RTL, and localized CLI conventions.
-	install = Installs Claude symlink or portable copied Codex skills; --sync enables repository-local refresh hooks.
+	install = Cross-platform installer linking one physical skill repo into Claude and Codex with recoverable legacy migration.
 	llmsend = Inter-session/inter-machine LLMsend messaging skill (symlink into the ../llmsend project).
 	llvm-guided-optimization = Optimize Zig hot paths via hand-tuned LLVM IR when algorithmic gains are exhausted.
 	mechatron-ci = Shared Mechatron Prime CI skill with Codex UI metadata.
@@ -27,16 +28,16 @@ annotate=[
 	onboard/scripts/collect-claude-context = Bash: day-anchored session selection for a cwd, reduces and concatenates for a summarising subagent
 	onboard/scripts/reduce-claude-transcript = LuaJIT: reduce one Claude session .jsonl to Markdown ~18x smaller; whitelisted record types, unknown = hard error
 	scaffold-zig-project = Scaffold a new greenfield Zig project from scratch.
-	ship = Commit/push and watch Garnix CI, set up CI/badges, or cut a tagged GitHub release.
+	ship = Commit and push known-green work, watch Mechatron Prime CI, or cut a tagged GitHub release.
 	supacode-cli = Control Supacode from the terminal — worktrees, tabs, and surfaces managed programmatically.
-	test = Runs the complete llm_skills installer regression suite.
-	tests/cli/test_codex_sync = Integration coverage for portable hook-driven Codex sync, recovery backups, and local-skill preservation.
+	test = Runs the complete llm_skills installer and skill-policy regression suite.
 	tests/cli/test_i18n_scope_policy = Regression guard for the i18n skill's explicit owner-decision and RULES.md recording gate.
-	tests/cli/test_install = Regression tests for CLI installer options, copied Codex skills, and rerun safety.
+	tests/cli/test_install = Regression tests for installer options, canonical skill-root links, shared metadata, and rerun safety.
 	tests/cli/test_memories = Regression-tests frontmatter validation, legacy migration, repository scaffolding, and .codescan pruning.
 	tests/cli/test_memory_titles = Classifies shared/project memory discovery and proves headers ignore VCS and .codescan metadata.
 	tests/cli/test_onboard_collect = tests day-anchored selection: whole newest day, size-floor walk-back, calendar bound, --list/--session
 	tests/cli/test_onboard_reducer = classifier-over-sets tests for the reducer: sensitivity, specificity, payload bound, reduction ratio, drift failure
 	tests/cli/test_retired_garnix_guidance = Regression gate preventing shared workflows from resurrecting retired Garnix CI guidance.
+	tests/cli/test_zero_copy_install = Integration test for zero-copy Codex skill installation, safe legacy archival, idempotence, and hook retirement.
 	zig-microbenchmarks = Add benchmarks to a Zig project, track hot-path performance, and investigate regressions.
 ]

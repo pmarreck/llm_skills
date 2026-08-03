@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+# shellcheck source=/dev/null
+source "${CAPTURE_LIB:-$HOME/dotfiles/bin/src/capture.bash}"
+
+failures=0
+sandbox="$(mktemp -d)"
+repo="$sandbox/repo with spaces"
+home="$sandbox/home with spaces"
+
+# shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap.
+cleanup() {
+	# This directory is created by this test under TMPDIR and contains no user data.
+	rm -rf "$sandbox"
+}
+trap cleanup EXIT
+
+pass() {
+	printf 'PASS: %s\n' "$1"
+}
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_contains() {
+	local label="$1" needle="$2" value="$3"
+	case "$value" in
+		*"$needle"*) pass "$label" ;;
+		*) fail "$label: missing $needle" ;;
+	esac
+}
+
+if [ -L "$ROOT/about-peter" ] && [ -f "$ROOT/about-peter/SKILL.md" ] &&
+	[ ! -L "$ROOT/about-peter/SKILL.md" ]; then
+	pass 'private project-coupled skill uses a directory link to a real SKILL.md'
+else
+	fail 'private project-coupled skill must use a directory link to a real SKILL.md'
+fi
+
+cp -pRP "$ROOT/." "$repo"
+git -C "$repo" config --local core.hooksPath .githooks
+
+# Model both collision classes the migration must preserve: an existing modern
+# user root and old materialized shared skills mixed with Codex-owned content.
+mkdir -p \
+	"$home/.agents/skills/private-local" \
+	"$home/.codex/skills/.system/system-probe" \
+	"$home/.codex/skills/local-only" \
+	"$home/.codex/skills/i18n" \
+	"$home/.codex/skills/mechatron-ci"
+printf '%s\n' private-local > "$home/.agents/skills/private-local/SKILL.md"
+printf '%s\n' system-probe > "$home/.codex/skills/.system/system-probe/SKILL.md"
+printf '%s\n' local-only > "$home/.codex/skills/local-only/SKILL.md"
+printf '%s\n' legacy-i18n-marker > "$home/.codex/skills/i18n/SKILL.md"
+printf '%s\n' legacy-mechatron-marker > "$home/.codex/skills/mechatron-ci/SKILL.md"
+
+out='' err='' rc=0
+# shellcheck disable=SC2016 # Positional parameters belong to the child Bash.
+capture bash -c 'printf "yes\n" | HOME="$1" "$2/install" --codex' _ "$home" "$repo"
+if [ "$rc" -ne 0 ]; then
+	fail "zero-copy Codex install exited $rc: $err"
+else
+	assert_contains 'installer announces zero-copy mode' 'Mode: zero-copy' "$out"
+	assert_contains 'installer announces the canonical user root' '.agents/skills' "$out"
+	assert_contains 'installer reports retired repository hooks' 'Retired copy-sync Git hook configuration' "$out"
+fi
+
+if [ -L "$home/.agents/skills" ] && [ "$(readlink "$home/.agents/skills")" = "$repo" ]; then
+	pass 'Codex user root points directly to the physical shared repository'
+else
+	fail 'Codex user root points directly to the physical shared repository'
+fi
+
+if [ -f "$home/.agents/skills/i18n/SKILL.md" ] && [ -f "$home/.agents/skills/mechatron-ci/SKILL.md" ]; then
+	pass 'shared skills resolve through the one repository link'
+else
+	fail 'shared skills resolve through the one repository link'
+fi
+
+if [ -f "$home/.codex/skills/.system/system-probe/SKILL.md" ]; then
+	pass 'migration preserves Codex system skills in place'
+else
+	fail 'migration preserves Codex system skills in place'
+fi
+
+if [ -f "$home/.codex/skills/local-only/SKILL.md" ]; then
+	pass 'migration preserves genuinely local-only Codex skills in place'
+else
+	fail 'migration preserves genuinely local-only Codex skills in place'
+fi
+
+if [ ! -e "$home/.codex/skills/i18n" ] && [ ! -e "$home/.codex/skills/mechatron-ci" ]; then
+	pass 'migration removes duplicate legacy shared names from active discovery'
+else
+	fail 'migration removes duplicate legacy shared names from active discovery'
+fi
+
+backup_path="$(command find "$home/.codex/backups" -mindepth 1 -maxdepth 1 -type d -name 'llm-skills-zero-copy.*' -print -quit 2>/dev/null || true)"
+if [ -n "$backup_path" ] &&
+	[ -f "$backup_path/agents-skills/private-local/SKILL.md" ] &&
+	[ "$(sed -n '1p' "$backup_path/legacy-codex-skills/i18n/SKILL.md")" = legacy-i18n-marker ] &&
+	[ "$(sed -n '1p' "$backup_path/legacy-codex-skills/mechatron-ci/SKILL.md")" = legacy-mechatron-marker ]; then
+	pass 'migration backs up the displaced root and byte-preserves legacy copies'
+else
+	fail 'migration backs up the displaced root and byte-preserves legacy copies'
+fi
+
+if [ -z "$(git -C "$repo" config --local --get core.hooksPath 2>/dev/null || true)" ]; then
+	pass 'migration retires only the obsolete repository-local hook setting'
+else
+	fail 'migration retires only the obsolete repository-local hook setting'
+fi
+
+backup_count_before="$(command find "$home/.codex/backups" -mindepth 1 -maxdepth 1 -type d -name 'llm-skills-zero-copy.*' -print 2>/dev/null | wc -l | tr -d ' ')"
+out='' err='' rc=0
+# shellcheck disable=SC2016 # Positional parameters belong to the child Bash.
+capture bash -c 'printf "yes\n" | HOME="$1" "$2/install" --codex' _ "$home" "$repo"
+backup_count_after="$(command find "$home/.codex/backups" -mindepth 1 -maxdepth 1 -type d -name 'llm-skills-zero-copy.*' -print 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$rc" -eq 0 ] && [ "$backup_count_before" = "$backup_count_after" ]; then
+	pass 'repeat install is idempotent and creates no empty backup'
+else
+	fail "repeat install rc=$rc backups=$backup_count_before->$backup_count_after"
+fi
+
+out='' err='' rc=0
+capture "$repo/install" --codex --sync
+if [ "$rc" -eq 64 ]; then
+	assert_contains 'removed sync mode explains its replacement' 'retired' "$err"
+else
+	fail "removed --sync mode exited $rc, expected 64"
+fi
+
+exit "$failures"

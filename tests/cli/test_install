@@ -3,11 +3,13 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+# shellcheck source=/dev/null
 source "${CAPTURE_LIB:-$HOME/dotfiles/bin/src/capture.bash}"
 
 failures=0
 sandbox="$(mktemp -d)"
 
+# shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap.
 cleanup() {
 	# This directory is created by this test under TMPDIR and contains no user data.
 	rm -rf "$sandbox"
@@ -37,6 +39,7 @@ if [ "$rc" -ne 0 ]; then
 	fail "installer help exited $rc"
 else
 	assert_contains 'installer help documents Codex mode' '--codex' "$out"
+	assert_contains 'installer help names the canonical Codex root' '.agents/skills' "$out"
 fi
 
 out='' err='' rc=0
@@ -49,51 +52,49 @@ fi
 
 home="$sandbox/home"
 out='' err='' rc=0
-capture bash -c '
-	find() { "$HOME/bin/find" "$@"; }
-	export -f find
-	printf "yes\\n" | HOME="$1" "$2/install" --codex
-' _ "$home" "$ROOT"
+# shellcheck disable=SC2016 # Positional parameters belong to the child Bash.
+capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"
 if [ "$rc" -ne 0 ]; then
 	fail "Codex install exited $rc: $err"
 else
 	assert_contains 'Codex install reports success' 'failed=0' "$out"
-	if [ ! -f "$home/.codex/skills/i18n/SKILL.md" ]; then
-		fail 'Codex install places i18n SKILL.md directly in its skill directory'
-	elif [ -L "$home/.codex/skills/i18n" ] || [ -L "$home/.codex/skills/i18n/SKILL.md" ]; then
-		fail 'Codex install dereferences the i18n skill directory and file'
-	elif [ -e "$home/.codex/skills/i18n/i18n" ]; then
-		fail 'Codex install does not nest a skill inside itself after link fallback'
+	if [ ! -L "$home/.agents/skills" ]; then
+		fail 'Codex install links its canonical user skill root'
+	elif [ "$(readlink "$home/.agents/skills")" != "$ROOT" ]; then
+		fail 'Codex install links its canonical user skill root to this repository'
+	elif [ ! -f "$home/.agents/skills/i18n/SKILL.md" ]; then
+		fail 'Codex install exposes i18n through the repository link'
 	else
-		pass 'Codex install creates a direct regular i18n skill'
+		pass 'Codex install exposes shared skills through one repository link'
 	fi
 fi
 
-if [ -f "$home/.codex/skills/mechatron-ci/SKILL.md" ] && [ -f "$home/.codex/skills/mechatron-ci/agents/openai.yaml" ]; then
+if [ -f "$home/.agents/skills/mechatron-ci/SKILL.md" ] && [ -f "$home/.agents/skills/mechatron-ci/agents/openai.yaml" ]; then
 	pass 'Codex install includes the shared Mechatron skill'
 else
 	fail 'Codex install includes the shared Mechatron skill'
 fi
 
-if [ -f "$home/.codex/skills/capture-collaboration-evidence/SKILL.md" ] &&
-	[ -f "$home/.codex/skills/capture-collaboration-evidence/agents/openai.yaml" ]; then
+if [ -f "$home/.agents/skills/capture-collaboration-evidence/SKILL.md" ] &&
+	[ -f "$home/.agents/skills/capture-collaboration-evidence/agents/openai.yaml" ]; then
 	pass 'Codex install includes the collaboration-evidence skill and UI metadata'
 else
 	fail 'Codex install includes the collaboration-evidence skill and UI metadata'
 fi
 if grep -Fq 'allow_implicit_invocation: true' \
-	"$home/.codex/skills/capture-collaboration-evidence/agents/openai.yaml"; then
+	"$home/.agents/skills/capture-collaboration-evidence/agents/openai.yaml"; then
 	pass 'collaboration-evidence skill explicitly permits implicit invocation'
 else
 	fail 'collaboration-evidence skill explicitly permits implicit invocation'
 fi
 
 out='' err='' rc=0
+# shellcheck disable=SC2016 # Positional parameters belong to the child Bash.
 capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"
 if [ "$rc" -ne 0 ]; then
 	fail "repeat Codex install exited $rc: $err"
 else
-	assert_contains 'repeat Codex install preserves existing skills' 'installed=0' "$out"
+	assert_contains 'repeat Codex install reuses the canonical link' 'already points to this repository' "$out"
 fi
 
 exit "$failures"

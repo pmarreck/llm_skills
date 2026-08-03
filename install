@@ -2,9 +2,8 @@
 # install — install this llm_skills clone for local agent harnesses.
 #
 # Default: symlink this clone to ~/.claude/skills for Claude Code.
-# Codex: run `./install --codex`; Codex currently skips symlinked skill
-# directories and symlinked SKILL.md files, so the Codex path creates real
-# directories under ~/.codex/skills and dereferences skill sources.
+# Codex: run `./install --codex`; current Codex releases discover user skills
+# from ~/.agents/skills and follow its link to this one physical repository.
 
 set -uo pipefail
 set -E
@@ -19,208 +18,144 @@ usage() {
 Usage: ./install [--claude|--codex|--help]
 
   --claude  Symlink this repo to ~/.claude/skills (default)
-  --codex         Install missing skills into ~/.codex/skills as real directories
-  --codex --sync  Refresh shared Codex skills and configure this repo's Git hooks
+  --codex   Symlink this repo to ~/.agents/skills and archive legacy copies
 EOF
 }
 
-list_skill_dirs() {
-	command find -L "$SCRIPT_DIR" -mindepth 2 -maxdepth 2 -name SKILL.md -exec dirname {} \; | sort -u
-}
+BACKUP_ROOT=''
 
-stage_skill() {
-	local skill_dir="$1" target="$2" name staging staged
-	name=${skill_dir##*/}
-	if ! staging="$(mktemp -d "$target/.${name}.install.XXXXXX")"; then
-		return 1
-	fi
-	staged="$staging/$name"
-	if ! cp -pRL "$skill_dir" "$staged"; then
-		# `staging` was made by mktemp under the resolved Codex skills directory.
-		rm -rf "$staging"
-		return 1
-	fi
-	printf '%s\n' "$staging"
-}
-
-configure_repo_hooks() {
-	if ! git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-		printf 'Failed to configure hooks: %s is not a Git worktree\n' "$SCRIPT_DIR" >&2
-		return 1
-	fi
-	if ! git -C "$SCRIPT_DIR" config --local core.hooksPath .githooks; then
-		printf 'Failed to configure repository-local hook path\n' >&2
-		return 1
-	fi
-	printf 'Configured repository-local hook path: .githooks (hooks live at %s/.githooks)\n' "$SCRIPT_DIR"
-}
-
-install_missing_codex_skills() {
-	local target="$HOME/.codex/skills"
-	local skill_dir name dest staging staged
-	local installed=0 skipped=0 failed=0
-
-    printf '\n'
-    printf 'llm_skills Codex installer\n'
-    printf '==========================\n'
-    printf 'Source (this repo):  %s\n' "$SCRIPT_DIR"
-    printf 'Target directory:    %s\n' "$target"
-    printf '\n'
-	printf 'Plan:\n'
-	printf '  - Create %s if needed.\n' "$target"
-	printf '  - Install missing skills as real directories.\n'
-	printf '  - Copy files portably and dereference symlinked sources.\n'
-	printf '  - Leave existing skill directories untouched.\n'
-    printf '\n'
-    printf 'Proceed? [y/N] '
-    read -r reply
-    case "${reply:-}" in
-        y|Y|yes|YES) ;;
-        *)
-            printf 'Aborted.\n' >&2
-            exit 1
-            ;;
-    esac
-
-    mkdir -p "$target"
-
-    while IFS= read -r skill_dir; do
-        name=${skill_dir##*/}
-        dest="$target/$name"
-
-        if [ ! -e "$skill_dir/SKILL.md" ]; then
-            printf 'Skipped unavailable skill (source could not be materialized): %s\n' "$name" >&2
-            skipped=$((skipped + 1))
-            continue
-        fi
-
-        if [ -e "$dest" ] || [ -L "$dest" ]; then
-            printf 'Skipped existing skill: %s\n' "$name"
-            skipped=$((skipped + 1))
-            continue
-        fi
-
-		if ! staging="$(stage_skill "$skill_dir" "$target")"; then
-			printf 'Failed to prepare skill: %s\n' "$name" >&2
-			failed=$((failed + 1))
-			continue
-		fi
-		staged="$staging/$name"
-
-		if mv "$staged" "$dest"; then
-			rmdir "$staging"
-			printf 'Installed skill: %s (copied)\n' "$name"
-			installed=$((installed + 1))
-		else
-			rm -rf "$staging"
-			printf 'Failed skill: %s\n' "$name" >&2
-			failed=$((failed + 1))
-		fi
-	done < <(list_skill_dirs)
-
-    printf '\nSummary: installed=%d skipped=%d failed=%d\n' "$installed" "$skipped" "$failed"
-    if [ "$failed" -ne 0 ]; then
-        exit 1
-	fi
-	printf 'Done. Restart Codex sessions to pick up newly-installed skills.\n'
-}
-
-sync_codex_skills() {
-	local target="$HOME/.codex/skills"
+ensure_backup_root() {
 	local backup_parent="$HOME/.codex/backups"
-	local backup_root=''
-	local skill_dir name dest staging staged diff_rc
-	local installed=0 refreshed=0 unchanged=0 skipped=0 failed=0
+	if [ -n "$BACKUP_ROOT" ]; then
+		return 0
+	fi
+	mkdir -p "$backup_parent"
+	BACKUP_ROOT="$(mktemp -d "$backup_parent/llm-skills-zero-copy.XXXXXX")"
+}
 
-	mkdir -p "$target"
+target_points_to_repo() {
+	local target="$1" resolved
+	if [ ! -L "$target" ] || [ ! -d "$target" ]; then
+		return 1
+	fi
+	resolved="$(cd "$target" && pwd -P)" || return 1
+	[ "$resolved" = "$SCRIPT_DIR" ]
+}
+
+repo_owns_skill_name() {
+	local name="$1" source="$SCRIPT_DIR/$1"
+	[ -f "$source/SKILL.md" ] || [ -L "$source/SKILL.md" ] || [ -L "$source" ]
+}
+
+retire_copy_sync_hook_config() {
+	local hooks_path=''
+	if ! git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		printf 'No repository-local copy-sync hook configuration found.\n'
+		return 0
+	fi
+	hooks_path="$(git -C "$SCRIPT_DIR" config --local --get core.hooksPath 2>/dev/null || true)"
+	if [ "$hooks_path" = '.githooks' ]; then
+		git -C "$SCRIPT_DIR" config --local --unset-all core.hooksPath
+		printf 'Retired copy-sync Git hook configuration from %s/.git/config\n' "$SCRIPT_DIR"
+	elif [ -n "$hooks_path" ]; then
+		printf 'Preserved unrelated repository hook path: %s\n' "$hooks_path"
+	else
+		printf 'Copy-sync Git hook configuration was already retired.\n'
+	fi
+}
+
+install_codex_zero_copy() {
+	local target="$HOME/.agents/skills"
+	local target_parent="$HOME/.agents"
+	local legacy_target="$HOME/.codex/skills"
+	local existing name source link_staging
+	local target_backed_up=0 archived=0 failed=0
+
+	if [ -z "${HOME:-}" ]; then
+		printf 'HOME must be non-empty\n' >&2
+		return 1
+	fi
+
 	printf '\n'
-	printf 'llm_skills Codex sync\n'
-	printf '======================\n'
-	printf 'Source skills: %s\n' "$SCRIPT_DIR"
-	printf 'Target directory: %s\n' "$target"
-	printf 'Mode: sync (noninteractive)\n'
+	printf 'llm_skills Codex installer\n'
+	printf '==========================\n'
+	printf 'Source repository: %s\n' "$SCRIPT_DIR"
+	printf 'User skill root:   %s\n' "$target"
+	printf 'Mode: zero-copy\n'
+	printf '\n'
+	printf 'Plan:\n'
+	printf '  - Point %s directly to this physical repository.\n' "$target"
+	printf '  - Archive only legacy Codex skill names owned by this repository.\n'
+	printf '  - Preserve Codex system and unrelated local-only skills in place.\n'
+	printf '  - Retire this repository\047s obsolete copy-sync hook setting.\n'
+	printf '\n'
+	printf 'Proceed? [y/N] '
+	read -r reply
+	case "${reply:-}" in
+		y|Y|yes|YES) ;;
+		*)
+			printf 'Aborted.\n' >&2
+			return 1
+			;;
+	esac
 
-	while IFS= read -r skill_dir; do
-		name=${skill_dir##*/}
-		dest="$target/$name"
-
-		if [ ! -e "$skill_dir/SKILL.md" ]; then
-			printf 'Skipped unavailable skill (source could not be materialized): %s\n' "$name" >&2
-			skipped=$((skipped + 1))
-			continue
+	if target_points_to_repo "$target"; then
+		printf 'User skill root already points to this repository.\n'
+	else
+		if [ -e "$target" ] || [ -L "$target" ]; then
+			ensure_backup_root
+			if mv "$target" "$BACKUP_ROOT/agents-skills"; then
+				target_backed_up=1
+				printf 'Archived previous user skill root.\n'
+			else
+				printf 'Failed to archive previous user skill root: %s\n' "$target" >&2
+				return 1
+			fi
 		fi
 
-		if [ -e "$dest" ] || [ -L "$dest" ]; then
-			if diff -qr "$skill_dir" "$dest" >/dev/null 2>&1; then
-				diff_rc=0
-			else
-				diff_rc=$?
+		mkdir -p "$target_parent"
+		link_staging="$(mktemp -d "$target_parent/.skills-link.XXXXXX")"
+		rmdir "$link_staging"
+		if ! ln -s "$SCRIPT_DIR" "$link_staging" || ! mv "$link_staging" "$target"; then
+			if [ -L "$link_staging" ]; then
+				unlink "$link_staging"
 			fi
-			if [ "$diff_rc" -eq 0 ]; then
-				printf 'Unchanged skill: %s\n' "$name"
-				unchanged=$((unchanged + 1))
+			if [ "$target_backed_up" -eq 1 ] && [ ! -e "$target" ] && [ ! -L "$target" ]; then
+				mv "$BACKUP_ROOT/agents-skills" "$target"
+			fi
+			printf 'Failed to install user skill root link: %s\n' "$target" >&2
+			return 1
+		fi
+		printf 'Linked user skill root to this repository.\n'
+	fi
+
+	if [ -d "$legacy_target" ]; then
+		while IFS= read -r existing; do
+			name=${existing##*/}
+			if ! repo_owns_skill_name "$name"; then
 				continue
 			fi
-			if [ "$diff_rc" -ne 1 ]; then
-				printf 'Failed to compare skill: %s\n' "$name" >&2
-				failed=$((failed + 1))
-				continue
-			fi
-		fi
-
-		if ! staging="$(stage_skill "$skill_dir" "$target")"; then
-			printf 'Failed to stage skill: %s\n' "$name" >&2
-			failed=$((failed + 1))
-			continue
-		fi
-		staged="$staging/$name"
-
-		if [ -e "$dest" ] || [ -L "$dest" ]; then
-			if [ -z "$backup_root" ]; then
-				mkdir -p "$backup_parent"
-				if ! backup_root="$(mktemp -d "$backup_parent/llm-skills-sync.XXXXXX")"; then
-					rm -rf "$staging"
-					printf 'Failed to create a recoverable backup directory\n' >&2
-					failed=$((failed + 1))
-					continue
-				fi
-			fi
-			if ! mv "$dest" "$backup_root/$name"; then
-				rm -rf "$staging"
-				printf 'Failed to preserve existing skill: %s\n' "$name" >&2
-				failed=$((failed + 1))
-				continue
-			fi
-			if mv "$staged" "$dest"; then
-				rmdir "$staging"
-				printf 'Refreshed skill: %s\n' "$name"
-				refreshed=$((refreshed + 1))
+			ensure_backup_root
+			mkdir -p "$BACKUP_ROOT/legacy-codex-skills"
+			if mv "$existing" "$BACKUP_ROOT/legacy-codex-skills/$name"; then
+				printf 'Archived duplicate legacy skill: %s\n' "$name"
+				archived=$((archived + 1))
 			else
-				mv "$backup_root/$name" "$dest"
-				rm -rf "$staging"
-				printf 'Failed to refresh skill: %s (restored its previous copy)\n' "$name" >&2
+				printf 'Failed to archive duplicate legacy skill: %s\n' "$name" >&2
 				failed=$((failed + 1))
 			fi
-		else
-			if mv "$staged" "$dest"; then
-				rmdir "$staging"
-				printf 'Installed skill: %s\n' "$name"
-				installed=$((installed + 1))
-			else
-				rm -rf "$staging"
-				printf 'Failed to install skill: %s\n' "$name" >&2
-				failed=$((failed + 1))
-			fi
-		fi
-	done < <(list_skill_dirs)
+		done < <(command find "$legacy_target" -mindepth 1 -maxdepth 1 -exec printf '%s\n' '{}' \; | sort)
+	fi
 
-	printf '\nSummary: installed=%d refreshed=%d unchanged=%d skipped=%d failed=%d\n' "$installed" "$refreshed" "$unchanged" "$skipped" "$failed"
-	if [ -n "$backup_root" ]; then
-		printf 'Recoverable previous copies: %s\n' "$backup_root"
+	retire_copy_sync_hook_config
+	printf '\nSummary: linked=1 archived=%d failed=%d\n' "$archived" "$failed"
+	if [ -n "$BACKUP_ROOT" ]; then
+		printf 'Recoverable previous state: %s\n' "$BACKUP_ROOT"
 	fi
 	if [ "$failed" -ne 0 ]; then
 		return 1
 	fi
+	printf 'Done. Codex detects skill changes automatically; restart if its UI remains stale.\n'
 }
 
 case "${1:---claude}" in
@@ -230,31 +165,20 @@ case "${1:---claude}" in
 		;;
 	--codex)
 		shift
-		sync=0
-		from_hook=0
-		while [ "$#" -gt 0 ]; do
-			case "$1" in
-				--sync) sync=1 ;;
-				--from-hook) from_hook=1 ;;
-				*)
-					usage >&2
-					exit 64
+		if [ "$#" -ne 0 ]; then
+			case "${1:-}" in
+				--sync|--from-hook)
+					printf "%s is retired; current Codex uses the zero-copy \$HOME/.agents/skills link.\n" "$1" >&2
 					;;
+				*) usage >&2 ;;
 			esac
-			shift
-		done
-		if [ "$sync" -eq 1 ]; then
-			sync_codex_skills
-		else
-			install_missing_codex_skills
+			exit 64
 		fi
-		if [ "$sync" -eq 1 ] && [ "$from_hook" -eq 0 ]; then
-			configure_repo_hooks
-		fi
+		install_codex_zero_copy
 		exit 0
 		;;
 	--sync|--from-hook)
-		printf '%s requires --codex\n' "$1" >&2
+		printf "%s is retired; current Codex uses the zero-copy \$HOME/.agents/skills link.\n" "$1" >&2
 		exit 64
 		;;
     --claude) ;;

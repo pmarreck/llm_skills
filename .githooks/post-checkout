@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-
-hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-exec "$hook_dir/run-codex-sync" post-checkout

@@ -1,1 +1,0 @@
-../../llm-skills-private/about-peter/SKILL.md

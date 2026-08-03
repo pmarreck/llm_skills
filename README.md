@@ -2,14 +2,20 @@
 
 [![Mechatron Prime CI](https://img.shields.io/endpoint?url=https%3A%2F%2Fthelio-nixos.tail66c90.ts.net%2Fbadges%2Fllm_skills.json&style=for-the-badge)](https://thelio-nixos.tail66c90.ts.net/mechatron-prime/)
 
-A collection of cross-cutting [Claude Code](https://docs.claude.com/en/docs/claude-code/overview)
-skills — focused, repeatable procedures that an LLM coding agent invokes
-on demand when the situation matches.
+A collection of cross-cutting skills for
+[Claude Code](https://docs.claude.com/en/docs/claude-code/overview),
+[Codex](https://developers.openai.com/codex/skills/), and compatible agent
+harnesses. Each skill is a focused procedure that an agent invokes when its
+task matches the skill description.
 
 This repo is the canonical home for general-purpose skills that aren't
 tied to any single project. Project-coupled skills (skills whose job IS
 to document one specific tool's protocol or workflow) live in their own
 project's repo and are symlinked in.
+
+For Codex compatibility, link the entire project-coupled skill directory and
+keep `SKILL.md` as a real file in the target. Codex 0.146 follows the directory
+link but ignores a symlink used only for `SKILL.md`.
 
 ## Install
 
@@ -19,43 +25,35 @@ cd llm_skills
 ./install
 ```
 
-The installer symlinks this clone to `$HOME/.claude/skills/`. It is
-idempotent (re-running it on an already-installed clone is a no-op),
-safe (backs up any existing `~/.claude/skills` directory or
-foreign-target symlink to `.bak.<timestamp>` before linking), and
-describes its full plan before prompting for confirmation.
+The default installer links this physical repository to
+`$HOME/.claude/skills`. It describes its plan before prompting, backs up a
+displaced path, and is idempotent.
 
-Codex also uses a `~/.codex/skills/` directory, but Codex skips symlinked
-skill directories and symlinked `SKILL.md` files during discovery. Install
-missing skills for Codex with:
+Current Codex releases discover personal skills under
+`$HOME/.agents/skills` and follow skill-directory symlinks. Install the same
+physical repository for Codex with:
 
 ```sh
 ./install --codex
 ```
 
-That mode creates real directories under `~/.codex/skills` and dereferences
-symlinked skill sources such as `about-peter` and `llmsend`.
+That mode links `$HOME/.agents/skills` directly to this repository. During an
+upgrade from the pre-0.146 materialized-copy layout, it moves only legacy
+`$HOME/.codex/skills/<name>` directories owned by this repository into a
+recoverable `$HOME/.codex/backups/llm-skills-zero-copy.*` directory. Codex's
+`.system` bundle and unknown local-only skills remain in place.
 
-To keep those real Codex directories synchronized after a pull, checkout, or
-merge, opt in once per clone:
-
-```sh
-./install --codex --sync
-```
-
-It sets `core.hooksPath=.githooks` in this repository's local Git config only.
-The tracked `post-checkout` and `post-merge` hooks announce that they are
-running, print the exact hook location, and refresh only skills managed by
-this repository. A staged replacement preserves any replaced managed skill in
-`~/.codex/backups/llm-skills-sync.*`; local-only skills and Codex's `.system/`
-bundle are untouched. The installer and hooks use portable Bash, Git, `cp`,
-`diff`, and `find` options compatible with macOS and Linux.
+No synchronization hook is needed because Claude and Codex read the same
+files. The retired `--sync` and `--from-hook` options fail with an explanation
+instead of silently preserving the old architecture. The installer uses
+portable Bash, Git, `find`, `ln`, `mv`, and `mktemp` forms supported on macOS
+and Linux.
 
 Other LLM coding harnesses (Gemini CLI, etc.) often follow the same
 `~/.<harness>/skills/` convention; symlinking this repo may work for
 them, depending on their discovery rules. The skills themselves are
-plain Markdown with YAML frontmatter — they're not Claude-Code-specific
-in content, only in discovery.
+plain Markdown with YAML frontmatter and are not specific to either Claude or
+Codex.
 
 ## How skills work
 

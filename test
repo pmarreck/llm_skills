@@ -33,10 +33,10 @@ else
 	failures=$((failures + 1))
 fi
 
-if "$ROOT/tests/cli/test_codex_sync"; then
-	printf 'PASS: Codex hook sync integration\n'
+if "$ROOT/tests/cli/test_zero_copy_install"; then
+	printf 'PASS: Codex zero-copy migration integration\n'
 else
-	printf 'FAIL: Codex hook sync integration\n' >&2
+	printf 'FAIL: Codex zero-copy migration integration\n' >&2
 	failures=$((failures + 1))
 fi
 
