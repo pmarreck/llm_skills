@@ -38,9 +38,12 @@
   backup is `~/.codex/backups/skill-root-migration.20260803T1644EDT`.
   Codex's `.system` tree remains active. The private `about-peter` dependency
   was inverted to a real `SKILL.md` after a failing nested-symlink probe and
-  shipped first as private commit `4c9159a`.
-- [ ] Commit and push the public zero-copy migration, independently match
+  ultimately shipped at private HEAD `f8c98df`, whose exact Mechatron check
+  passed in 2 seconds.
+- [x] Commit and push the public zero-copy migration, independently match
   `origin/yolo`, and verify exact-commit Mechatron Prime CI.
+  Completed 2026-08-03 17:02 EDT. Implementation commit `ce590c5` matched
+  `origin/yolo` and its exact Mechatron Prime check passed in 6 seconds.
 
 - [x] Retire active Garnix recommendations from every shared skill and make
   `$mechatron-ci` the single source of truth for CI setup, target manifests,
