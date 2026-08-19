@@ -1,5 +1,68 @@
 # Plan
 
+## Active — shared `writing-nix` engineering skill (2026-08-19)
+
+- [x] Derive the skill's decision-changing guidance from relevant shared
+      memories and current primary Nix/Nixpkgs documentation; separate durable
+      rules from version-sensitive advice and Peter-specific host policy.
+      - Curiosity poke: a broad Nix encyclopedia would consume context while
+        making trigger selection worse, so each retained rule must prevent a
+        demonstrated failure or materially improve diagnosis.
+      - Include a sourced "surprising behavior" pass: recent changes,
+        counterintuitive mechanisms, and platform asymmetries that overturn a
+        plausible agent assumption. Since training-corpus membership is not
+        observable, use novelty relative to the agent's initial prediction as
+        the test and record which assumption each item overturns.
+      - Include ecosystem and community history relevant to contributing to
+        Nixpkgs: Guix lineage, governance disputes, forks, compatibility, and
+        contribution norms. Present this human context as ecosystem “lore.”
+        Separate documented events and project positions from inference so the
+        skill supplies temporary technical and human context expertise.
+      - Compare each active implementation/distribution with upstream Nix:
+        advantages, disadvantages, maturity, compatibility boundaries, and
+        whether supported side-by-side userspace installation is possible.
+      - Completed 2026-08-19 12:59 EDT. Selected private lessons were checked
+        against current primary/first-party Nix, Nixpkgs, NixOS, Lix,
+        Determinate Nix, Snix, and Guix records.
+- [x] Add a failing integration test for the new skill's observable contract,
+      including the Git-index visibility trap, pre-build source audit, scoped
+      reference routing, and source attribution.
+      - Curiosity poke: a wording-presence test can pass while the skill still
+        permits an agent to run Nix before checking the index; test the required
+        ordering and executable classifier behavior where practical.
+      - Completed 2026-08-19 12:59 EDT. The test failed before the skill and
+        checker existed, then separately failed for the requested comparison
+        and lore contracts before those sections were added.
+- [x] Implement the `writing-nix` skill with a compact entrypoint and focused references
+      for flake sources, derivation/package construction, diagnosis/system
+      operations, and ecosystem/community context; update discoverability
+      metadata and repository documentation.
+      - Curiosity poke: destructive activation and lockfile changes require
+        explicit authorization boundaries even when evaluation/build commands
+        are otherwise safe.
+      - Completed 2026-08-19 12:59 EDT. Added the skill, read-only input
+        classifier, four routed references, interface metadata, and README
+        discovery entry.
+- [x] Stage every new skill input before the Nix-backed full suite, validate the
+      package, run targeted and complete tests, annotate new files with dirtree,
+      and commit only this unit while preserving unrelated staged work.
+      - Curiosity poke: the skill must dogfood its own central invariant or its
+        passing Nix check is meaningless.
+      - Completed 2026-08-19 12:59 EDT. The checker first rejected all eight
+        untracked inputs, the exact paths were staged, ShellCheck and the skill
+        validator passed, the complete suite passed, and `nix flake check -L
+        --all-systems` passed all declared systems.
+- [x] After the skill is green, audit the incorporated global Nix memories for
+      consolidation. Present an exact keep/merge/remove set before altering the
+      private memory repo; retain local incident evidence or narrow exceptions,
+      and remove only generic lessons fully superseded by the public skill.
+      - Curiosity poke: metadata-only recall already avoids body ingestion, so
+        deletion must produce a clearer index rather than merely move useful
+        provenance out of reach.
+      - Completed 2026-08-19 12:59 EDT. The private root remains unchanged;
+        the exact recoverable removal/retention proposal will be presented to
+        Peter for approval.
+
 ## Active — single physical cross-agent skill tree (2026-08-03)
 
 - [x] Empirically test Codex 0.146 user-skill discovery through a directory

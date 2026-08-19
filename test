@@ -68,6 +68,13 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_writing_nix_skill"; then
+	printf 'PASS: writing-nix skill contract\n'
+else
+	printf 'FAIL: writing-nix skill contract\n' >&2
+	failures=$((failures + 1))
+fi
+
 if "$ROOT/tests/cli/test_onboard_reducer"; then
 	printf 'PASS: onboard transcript reducer\n'
 else

@@ -38,6 +38,14 @@ annotate=[
 	tests/cli/test_onboard_collect = tests day-anchored selection: whole newest day, size-floor walk-back, calendar bound, --list/--session
 	tests/cli/test_onboard_reducer = classifier-over-sets tests for the reducer: sensitivity, specificity, payload bound, reduction ratio, drift failure
 	tests/cli/test_retired_garnix_guidance = Regression gate preventing shared workflows from resurrecting retired Garnix CI guidance.
+	tests/cli/test_writing_nix_skill = Integration contract for skill discovery, Git input classification, source attribution, and ecosystem comparison.
 	tests/cli/test_zero_copy_install = Integration test for zero-copy Codex skill installation, safe legacy archival, idempotence, and hook retirement.
+	writing-nix/SKILL.md = Routes Nix authoring, packaging, diagnosis, activation, and ecosystem-lore work through scoped references.
+	writing-nix/agents/openai.yaml = Codex display metadata and default prompt for the writing-nix skill.
+	writing-nix/references/derivations-and-packaging.md = Dependency roles, derivation phases, hooks, IFD, cross builds, and language dependency caching.
+	writing-nix/references/diagnostics-and-activation.md = Layered Nix diagnosis, fixed-output failures, closure safety, and NixOS activation gates.
+	writing-nix/references/ecosystem-and-community.md = Nix ecosystem lore, project tradeoffs, coexistence boundaries, governance history, and contribution policy.
+	writing-nix/references/sources-and-flakes.md = Git source visibility, path-input behavior, source filtering, and flake-check contracts.
+	writing-nix/scripts/check-flake-inputs = Read-only Git-index classifier for task-required inputs to Git-backed flakes.
 	zig-microbenchmarks = Add benchmarks to a Zig project, track hot-path performance, and investigate regressions.
 ]

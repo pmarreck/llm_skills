@@ -58,7 +58,8 @@
 							# `#!/usr/bin/env bash` script is unrunnable until its
 							# shebang is rewritten to a store path.
 							patchShebangs ./test ./install ./tests \
-								./memories/scripts ./onboard/scripts
+								./memories/scripts ./onboard/scripts \
+								./writing-nix/scripts
 
 							# The suite writes sandboxes under TMPDIR and needs a
 							# writable HOME; the sandbox provides neither by default.

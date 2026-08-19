@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Nix"
+  short_description: "Write and debug reliable Nix code"
+  default_prompt: "Use $writing-nix to review and improve this Nix configuration."

@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+
+# Prove the writing-nix skill is discoverable and its Git visibility guard
+# classifies tracked, staged, untracked, ignored, and missing inputs correctly.
+
+set -u
+
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
+skill_root="$root/writing-nix"
+subject="$skill_root/scripts/check-flake-inputs"
+capture_lib="${CAPTURE_LIB:-$HOME/dotfiles/bin/src/capture.bash}"
+failures=0
+sandbox=$(mktemp -d "${TMPDIR:-/tmp}/writing-nix-test.XXXXXX")
+
+# shellcheck disable=SC2329 # Invoked indirectly by the EXIT trap below.
+cleanup() {
+	case "$sandbox" in
+		"${TMPDIR:-/tmp}"/writing-nix-test.*) rm -rf -- "$sandbox" ;;
+	esac
+}
+trap cleanup EXIT
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_equal() {
+	local label="$1" expected="$2" actual="$3"
+	if [ "$actual" != "$expected" ]; then
+		fail "$label"
+		printf '  expected: %q\n' "$expected" >&2
+		printf '  actual:   %q\n' "$actual" >&2
+	fi
+}
+
+assert_contains() {
+	local label="$1" haystack="$2" needle="$3"
+	if [[ "$haystack" != *"$needle"* ]]; then
+		fail "$label"
+		printf '  missing: %q\n' "$needle" >&2
+	fi
+}
+
+for required in \
+	SKILL.md \
+	agents/openai.yaml \
+	references/sources-and-flakes.md \
+	references/derivations-and-packaging.md \
+	references/ecosystem-and-community.md \
+	references/diagnostics-and-activation.md \
+	scripts/check-flake-inputs; do
+	if [ ! -f "$skill_root/$required" ]; then
+		fail "writing-nix includes $required"
+	fi
+done
+
+if [ ! -x "$subject" ]; then
+	fail 'check-flake-inputs is executable'
+	exit "$failures"
+fi
+
+if [ ! -r "$capture_lib" ]; then
+	fail "capture helper is readable at $capture_lib"
+	exit "$failures"
+fi
+# shellcheck source=/dev/null
+source "$capture_lib"
+
+repo="$sandbox/repo with spaces"
+mkdir -p "$repo/src"
+git -C "$repo" init -q
+git -C "$repo" config user.email test@example.invalid
+git -C "$repo" config user.name 'writing-nix test'
+printf '%s\n' '{ outputs = _: {}; }' > "$repo/flake.nix"
+printf '%s\n' 'tracked' > "$repo/src/tracked.nix"
+printf '%s\n' 'ignored.nix' > "$repo/.gitignore"
+git -C "$repo" add flake.nix src/tracked.nix .gitignore
+git -C "$repo" commit -qm 'fixture'
+
+out='' err='' rc=0
+capture "$subject" --repo "$repo" flake.nix src/tracked.nix
+assert_equal 'committed inputs pass' '0' "$rc"
+assert_contains 'successful report counts both committed inputs' "$out" 'tracked inputs: 2'
+assert_equal 'committed inputs keep stderr clean' '' "$err"
+
+printf '%s\n' 'unstaged tracked edit' > "$repo/src/tracked.nix"
+capture "$subject" --repo "$repo" src/tracked.nix
+assert_equal 'an unstaged edit to an already tracked input passes' '0' "$rc"
+
+printf '%s\n' 'new staged input' > "$repo/src/new file.nix"
+git -C "$repo" add 'src/new file.nix'
+capture "$subject" --repo "$repo" 'src/new file.nix'
+assert_equal 'a newly staged path with spaces passes' '0' "$rc"
+
+printf '%s\n' 'invisible to a Git flake' > "$repo/src/untracked.nix"
+capture "$subject" --repo "$repo" src/untracked.nix
+assert_equal 'an untracked required input fails' '1' "$rc"
+assert_equal 'untracked input produces no success output' '' "$out"
+assert_contains 'untracked diagnostic names the file' "$err" 'src/untracked.nix'
+assert_contains 'untracked diagnostic gives a path-scoped remedy' "$err" 'git -C'
+assert_contains 'untracked diagnostic stages only the requested path' "$err" "add -- 'src/untracked.nix'"
+if git -C "$repo" ls-files --error-unmatch -- src/untracked.nix >/dev/null 2>&1; then
+	fail 'the checker never stages an untracked input itself'
+fi
+
+printf '%s\n' 'ignored' > "$repo/ignored.nix"
+capture "$subject" --repo "$repo" ignored.nix
+assert_equal 'an ignored required input fails distinctly' '1' "$rc"
+assert_contains 'ignored diagnostic identifies ignore policy' "$err" 'ignored by Git'
+assert_contains 'ignored diagnostic does not silently force-add' "$err" 'review .gitignore before using git add -f'
+
+capture "$subject" --repo "$repo" src/missing.nix
+assert_equal 'a missing required input fails distinctly' '1' "$rc"
+assert_contains 'missing diagnostic names the absent path' "$err" 'does not exist'
+
+capture "$subject" --repo "$repo"
+assert_equal 'an empty path set is a usage error' '2' "$rc"
+assert_contains 'usage error explains required input arguments' "$err" 'INPUT_PATH...'
+
+capture "$subject" --repo "$sandbox/not-a-repo" flake.nix
+assert_equal 'a non-repository root is rejected' '2' "$rc"
+assert_contains 'non-repository diagnostic names the contract' "$err" 'not inside a Git worktree'
+
+for reference in \
+	references/sources-and-flakes.md \
+	references/derivations-and-packaging.md \
+	references/ecosystem-and-community.md \
+	references/diagnostics-and-activation.md; do
+	if ! rg -F -q -- "$reference" "$skill_root/SKILL.md"; then
+		fail "SKILL.md routes readers to $reference"
+	fi
+done
+
+if ! rg -q 'https://(nix\.dev|nixos\.org)' "$skill_root"/references; then
+	fail 'references attribute guidance to primary Nix documentation'
+fi
+
+community_reference="$skill_root/references/ecosystem-and-community.md"
+if ! rg -F -q -- '# Ecosystem lore and community context' "$community_reference"; then
+	fail 'human history, debates, and forks are identified as ecosystem lore'
+fi
+for marker in \
+	'Advantages relative to upstream Nix' \
+	'Tradeoffs relative to upstream Nix' \
+	'Side-by-side'; do
+	if ! rg -F -q -- "$marker" "$community_reference"; then
+		fail "ecosystem comparison includes $marker"
+	fi
+done
+
+if ! rg -F -q -- 'writing-nix' "$root/README.md"; then
+	fail 'README lists writing-nix for human discovery'
+fi
+
+exit "$failures"

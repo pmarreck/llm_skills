@@ -85,6 +85,7 @@ for the full mechanism.
 | [`handoff`](handoff/SKILL.md) | Writing a session handoff document so a fresh agent can pick up the work with full purpose + intent |
 | [`i18n`](i18n/SKILL.md) | Any user-facing UI work involving translations, locales, `--lang`, RTL, or bilingual errors |
 | [`memories`](memories/SKILL.md) | Curate, validate, consolidate, and promote durable shared/project memory lessons |
+| [`writing-nix`](writing-nix/SKILL.md) | Authoring, packaging, debugging, or contributing Nix code with current ecosystem context |
 | [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
 | [`mechatron-ci`](mechatron-ci/SKILL.md) | Configure or audit a project for Thelio-hosted Mechatron Prime CI |
 

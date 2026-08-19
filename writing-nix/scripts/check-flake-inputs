@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+# Classify task-required paths against the Git index before a Git-backed flake
+# snapshots its source. This command deliberately never stages files.
+
+set -u
+
+usage() {
+	cat >&2 <<'USAGE'
+Usage: check-flake-inputs [--repo REPOSITORY] INPUT_PATH...
+
+Verify that every required flake input exists and is visible to Git.
+Paths are interpreted relative to the repository root.
+USAGE
+}
+
+about() {
+	printf '%s\n' 'check-flake-inputs 1.0.0 - classify required Git-flake inputs'
+}
+
+quote_single() {
+	local value="$1"
+	value=${value//\'/\'\\\'\'}
+	printf "'%s'" "$value"
+}
+
+repo_arg='.'
+declare -a inputs=()
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--repo)
+			if [ "$#" -lt 2 ]; then
+				usage
+				exit 2
+			fi
+			repo_arg="$2"
+			shift 2
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		--about)
+			about
+			exit 0
+			;;
+		--)
+			shift
+			while [ "$#" -gt 0 ]; do
+				inputs+=("$1")
+				shift
+			done
+			;;
+		-*)
+			printf 'ERROR: unknown option: %s\n' "$1" >&2
+			usage
+			exit 2
+			;;
+		*)
+			inputs+=("$1")
+			shift
+			;;
+	esac
+done
+
+if [ "${#inputs[@]}" -eq 0 ]; then
+	usage
+	exit 2
+fi
+
+repo_root=$(git -C "$repo_arg" rev-parse --show-toplevel 2>/dev/null) || {
+	printf 'ERROR: %s is not inside a Git worktree.\n' "$(quote_single "$repo_arg")" >&2
+	exit 2
+}
+
+tracked=0
+failures=0
+
+for input in "${inputs[@]}"; do
+	case "$input" in
+		"$repo_root") relative='.' ;;
+		"$repo_root"/*) relative=${input#"$repo_root"/} ;;
+		/*)
+			printf 'ERROR: %s is outside repository %s.\n' \
+				"$(quote_single "$input")" "$(quote_single "$repo_root")" >&2
+			failures=$((failures + 1))
+			continue
+			;;
+		*) relative=${input#./} ;;
+	esac
+
+	case "/$relative/" in
+		*/../*)
+			printf 'ERROR: %s escapes the repository root.\n' \
+				"$(quote_single "$input")" >&2
+			failures=$((failures + 1))
+			continue
+			;;
+	esac
+
+	if [ ! -e "$repo_root/$relative" ] && [ ! -L "$repo_root/$relative" ]; then
+		printf 'ERROR: %s does not exist.\n' "$(quote_single "$relative")" >&2
+		failures=$((failures + 1))
+		continue
+	fi
+
+	if git -C "$repo_root" check-ignore -q -- "$relative" 2>/dev/null; then
+		printf 'ERROR: %s is ignored by Git; review .gitignore before using git add -f.\n' \
+			"$(quote_single "$relative")" >&2
+		failures=$((failures + 1))
+		continue
+	fi
+
+	if git -C "$repo_root" ls-files --error-unmatch -- "$relative" >/dev/null 2>&1; then
+		tracked=$((tracked + 1))
+		continue
+	fi
+
+	printf 'ERROR: %s exists but is untracked and invisible to a Git-backed flake.\n' \
+		"$(quote_single "$relative")" >&2
+	printf 'Remedy after review: git -C %s add -- %s\n' \
+		"$(quote_single "$repo_root")" "$(quote_single "$relative")" >&2
+	failures=$((failures + 1))
+done
+
+if [ "$failures" -ne 0 ]; then
+	exit 1
+fi
+
+printf 'tracked inputs: %d\n' "$tracked"
