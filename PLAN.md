@@ -1,5 +1,14 @@
 # Plan
 
+## Completed — retire Supacode skill (2026-08-19)
+
+- [x] Remove the staged `supacode-cli` skill and its stale dirtree discovery
+      metadata now that Supacode is retired; preserve the deletion in Git.
+      - Curiosity poke: a deleted skill must not remain advertised through
+        README or sideband discovery metadata.
+      - Completed 2026-08-19 13:14 EDT. README and PLAN contain no other active
+        Supacode discovery entry; the known-green suite covers installation.
+
 ## Active — shared `writing-nix` engineering skill (2026-08-19)
 
 - [x] Derive the skill's decision-changing guidance from relevant shared

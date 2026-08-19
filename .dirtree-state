@@ -29,7 +29,6 @@ annotate=[
 	onboard/scripts/reduce-claude-transcript = LuaJIT: reduce one Claude session .jsonl to Markdown ~18x smaller; whitelisted record types, unknown = hard error
 	scaffold-zig-project = Scaffold a new greenfield Zig project from scratch.
 	ship = Commit and push known-green work, watch Mechatron Prime CI, or cut a tagged GitHub release.
-	supacode-cli = Control Supacode from the terminal — worktrees, tabs, and surfaces managed programmatically.
 	test = Runs the complete llm_skills installer and skill-policy regression suite.
 	tests/cli/test_i18n_scope_policy = Regression guard for the i18n skill's explicit owner-decision and RULES.md recording gate.
 	tests/cli/test_install = Regression tests for installer options, canonical skill-root links, shared metadata, and rerun safety.
