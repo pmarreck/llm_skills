@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lean 4 Development"
+  short_description: "Build and verify version-pinned Lean 4 software"
+  default_prompt: "Use $lean4-development to implement or review this Lean 4 work with explicit proof boundaries."
