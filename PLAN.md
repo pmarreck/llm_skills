@@ -1,5 +1,23 @@
 # Plan
 
+## Completed — project intentions and overview migration (2026-09-08)
+
+- [x] Add agent-neutral `gather-project-intentions` with evidence-first migration,
+      focused interviews, optional terminology and optional later directions.
+- [x] Clarify the canonical project-document instructions without reorganizing
+      them; update handoff and i18n references to the retired overview convention.
+- [x] Pilot in `nix_ex`, preserving its newly recorded audience and all useful
+      overview content; do not change its implementation or the rest of the fleet.
+- [x] Validate discovery, behavioral scenarios and complete suites; commit only
+      scoped passing work. Check contradictions and recovery before retiring files.
+      Completed 2026-09-08 16:27 EDT. Both shared discovery links resolve to the
+      same skill file. Schema validation, the complete suite, and the native Linux
+      Nix check passed; the pilot passed 35 tests plus CLI/example checks.
+      Independent temporary fixtures exercised lossless dirty-file migration,
+      missing purpose, and conflicting goals. Follow-up wording limits discovery
+      audits to installation and avoids creating agent instruction files unasked.
+      Symlink migration and long-intent extraction were not behaviorally tested.
+
 ## Completed — retire Supacode skill (2026-08-19)
 
 - [x] Remove the staged `supacode-cli` skill and its stale dirtree discovery

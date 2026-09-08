@@ -11,6 +11,7 @@ annotate=[
 	erect-agent-stack = Stand up or join a project's agent stack — tmux session + remoted coding agent — in one idempotent command.
 	fix-zig-deps-hash = Fix nix build zigDeps/zigDepsHash mismatches after build.zig.zon dependency changes.
 	flake.nix = Pure Nix test environment declaring Bash, LuaJIT, and every suite tool and patched script interpreter.
+	gather-project-intentions = Cross-agent project intent discovery, safe overview migration, and focused owner interviews
 	handoff = Condense current dev state into a handoff doc conveying purpose and intent to the next agent.
 	i18n = Canonical i18n discipline: 50-locale set, compile-time enforcement, bilingual errors, RTL, --lang/--help conventions.
 	i18n/SKILL.md = Canonical opt-in i18n discipline: scope decision gate, 50 locales, enforcement, bilingual errors, RTL, and localized CLI conventions.

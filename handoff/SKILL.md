@@ -74,8 +74,11 @@ If you are unsure of any of WHY / RECENT / IMMEDIATE / ULTIMATE:
 
 1. First check older HANDOFF-*.md files in the working dir (you
    already read them in step 0); reuse and refine their framing.
-2. Then check top-level project docs (`PROJECT_OVERVIEW.md`,
-   `PLAN.md`, `docs/SPEC.md`, etc.) for the project's stated vision.
+2. Then check `INTENT.md`, relevant `intents/` directions,
+   `TERMINOLOGY.md`, `PLAN.md`, and existing specifications. Use
+   `PROJECT_OVERVIEW.md` as a legacy source only if it has not been migrated.
+   The shared `gather-project-intentions` skill handles unclear purpose or
+   an authorized migration; a handoff must not silently redefine project intent.
 3. If still unsure, **ASK the user to clarify before writing the
    document**. Do not invent purpose; an invented purpose poisons
    every downstream session that reads it.
@@ -263,12 +266,13 @@ verbatim (lightly adapted if needed) as the final section:
   required in your environment. The next `/handoff` will create a
   fresh one.
 - Next, read any top-level Markdown documents in this directory that
-  are not yet in your context (`PROJECT_OVERVIEW.md`, `PLAN.md`,
+  are not yet in your context (`INTENT.md`, `TERMINOLOGY.md`, `PLAN.md`,
   `RULES.md`, `AGENTS.md`, `CLAUDE.md`, `CODE_MINIMAP.md`,
   `MISTAKES.md`, `DESIRES.md`, `LEARNINGS.md`, and anything else at
   the project root). These almost always contain important
   work-related directives that this handoff references rather than
-  duplicates.
+  duplicates. Read only relevant `intents/` directions. An unmigrated
+  `PROJECT_OVERVIEW.md` is legacy context, not a competing source of truth.
 ```
 
 ## Document skeleton

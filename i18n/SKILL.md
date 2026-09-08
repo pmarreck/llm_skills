@@ -99,7 +99,7 @@ have to vendor a full likelihood-subtags database. The pattern generalizes:
 any macrolanguage with script variants (e.g. `sr` Cyrillic/Latin) can use a
 small region→variant fallback table behind the longest-match parser.
 
-**Why this 50 (the selection lens — preserve in PROJECT_OVERVIEW.md):**
+**Why this 50 (the selection lens — preserve in `docs/I18N.md`, linked from `INTENT.md` when relevant):**
 high-computer-penetration languages PLUS deliberately under-served
 ones (Hausa, Amharic, Yoruba, Igbo, Filipino) on a "seed adoption where
 English penetration is thin" rationale. NOT a top-50-by-speakers list.
@@ -384,7 +384,8 @@ If the project will have UI:
 1. Drop in `src/i18n/` with the structure above.
 2. Define the key registry from day 1 (even if only English is
    populated).
-3. Mark the project's phase in PROJECT_OVERVIEW.md ("**i18n phase:
+3. Mark the project's phase in `RULES.md` alongside its Internationalization
+   decision ("**i18n phase:
    prepare**" or "**i18n phase: enforce**").
 4. List the 50 locales explicitly in `docs/I18N.md` with the
    selection rationale (so future contributors don't relitigate which
