@@ -1,5 +1,22 @@
 # Plan
 
+## Completed — Herdr agent orchestration (2026-09-10)
+
+- [x] Replace tmux-first erect-agent-stack and llmsend guidance with Herdr
+      discovery, workspace reuse, native agent launch/prompt and durable notes.
+- [x] Update notification mechanics and tests; preserve human drafts, exact
+      agent identity and resume context. Mark any remaining tmux helper as legacy.
+- [x] Audit related shared guidance, validate both repositories, and record
+      the dedicated corruption_probe agent launch as a live workflow check.
+      Completed 2026-09-10 EDT. Claude started fresh in corruption_probe's own
+      Herdr workspace, consumed the kickoff through its inbox monitor, and sent
+      an acknowledgement. Both suites and skill validators pass. The llmsend
+      notification helper was tested against live Herdr as well as mocks; its
+      installed CLI requires title-first notification arguments despite help.
+      The dotfiles executable remains a legacy tmux tool, explicitly excluded
+      from the new native-Herdr skill workflow. No active sessions were migrated
+      or restarted, apart from the requested new project agent.
+
 ## Completed — project intentions and overview migration (2026-09-08)
 
 - [x] Add agent-neutral `gather-project-intentions` with evidence-first migration,

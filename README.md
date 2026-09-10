@@ -103,7 +103,7 @@ for the full mechanism.
 
 | Skill | Lives in | Trigger |
 |---|---|---|
-| `llmsend` | [`llmsend`](https://github.com/pmarreck/llmsend) (separate repo) | Coordinating between agent sessions running sibling projects via inbox notes + tmux pings |
+| `llmsend` | [`llmsend`](https://github.com/pmarreck/llmsend) (separate repo) | Coordinating project agents via durable inbox notes, application hooks and Herdr |
 
 ## Authoring a new skill
 

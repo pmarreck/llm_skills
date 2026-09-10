@@ -9,6 +9,7 @@ annotate=[
 	deep-code-review = Audit a codebase or major subsystem for quality and missed issues at project milestones.
 	dispatch = Dispatch background subagents for substantial tasks, fanning out parallel work with progress checkpointing.
 	erect-agent-stack = Stand up or join a project's agent stack — tmux session + remoted coding agent — in one idempotent command.
+	erect-agent-stack/SKILL.md = Herdr project-agent discovery, persistent context, launch and reuse workflow
 	fix-zig-deps-hash = Fix nix build zigDeps/zigDepsHash mismatches after build.zig.zon dependency changes.
 	flake.nix = Pure Nix test environment declaring Bash, LuaJIT, and every suite tool and patched script interpreter.
 	gather-project-intentions = Cross-agent project intent discovery, safe overview migration, and focused owner interviews
