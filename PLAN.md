@@ -13,8 +13,8 @@
       an acknowledgement. Both suites and skill validators pass. The llmsend
       notification helper was tested against live Herdr as well as mocks; its
       installed CLI requires title-first notification arguments despite help.
-      The dotfiles executable remains a legacy tmux tool, explicitly excluded
-      from the new native-Herdr skill workflow. No active sessions were migrated
+      Follow-up: Peter requested migrating the executable too; the dotfiles
+      helper now uses Herdr and the skill documents its tested CLI. No active sessions were migrated
       or restarted, apart from the requested new project agent.
 
 ## Completed — project intentions and overview migration (2026-09-08)

@@ -9,9 +9,42 @@ Herdr is the default project-agent multiplexer (Peter, 2026-09-10). Keep one
 project per named workspace unless Peter requests another layout. This workflow
 is shared by all agent clients.
 
-The historical dotfiles executable named `erect-agent-stack` still targets
-tmux. Do not invoke it for this workflow or silently fall back to tmux. Use
-Herdr's native controls below; tmux is only for explicitly requested legacy work.
+The dotfiles executable `erect-agent-stack` implements this Herdr workflow.
+Use it for routine launches and reuse; use native controls below for inspection
+and exceptional cases. tmux is only for explicitly requested legacy work.
+
+## CLI
+
+```bash
+erect-agent-stack --dry-run --json "$project_dir"
+erect-agent-stack --no-attach "$project_dir"
+erect-agent-stack --agent codex --resume "$session_id" --no-attach "$project_dir"
+erect-agent-stack --agent claude --fresh --no-attach "$project_dir"
+```
+
+Read `erect-agent-stack --help` for the installed options. A live matching agent
+is always reused, even with `--fresh`. Otherwise it resumes the saved exact ID.
+On first adoption, explicitly select `--fresh`, `--resume ID`, or `--continue`;
+absence of this helper's record does not prove absence of older conversations.
+`--continue` selects the weaker last-in-directory behavior. No speculative fresh
+fallback occurs. Specify the known backend for a previously unrecorded agent.
+
+Launch records live under `${XDG_STATE_HOME:-$HOME/.local/state}/erect-agent-stack`
+(override `ERECT_STATE_DIR`); `--json` reports the exact file, backend, pane,
+workspace and native session ID. They contain no credentials. Refresh a record
+by invoking the helper while the agent is live if its ID arrived after startup.
+Missing/ambiguous identity requires inspection rather than a guessed resume.
+
+`--dry-run` performs discovery only, without creating workspaces, state, focus
+changes or input. `--focus` explicitly selects the resulting workspace;
+automation otherwise leaves focus alone. `--checker` sets `MFIC_ROLE=checker`
+only in a newly created workspace's environment.
+
+`--note PATH` takes an already-written project `inbox/*.frontmatter.md` note
+and emits a human notification. It never types into an agent prompt. The old
+`--ping` is retired; apply the `llmsend` wake workflow when a terminal wake is
+needed. The helper leaves trust/login dialogs untouched and reports unready
+startup; inspect and answer only the authorized project-trust case below.
 
 ## Discover and reuse
 
