@@ -87,6 +87,7 @@ for the full mechanism.
 | [`i18n`](i18n/SKILL.md) | Any user-facing UI work involving translations, locales, `--lang`, RTL, or bilingual errors |
 | [`memories`](memories/SKILL.md) | Curate, validate, consolidate, and promote durable shared/project memory lessons |
 | [`writing-nix`](writing-nix/SKILL.md) | Authoring, packaging, debugging, or contributing Nix code with current ecosystem context |
+| [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Target-separated builds, host-specific PATH entrypoints, Nix/native build alignment, and complete application bundles |
 | [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
 | [`mechatron-ci`](mechatron-ci/SKILL.md) | Configure or audit a project for Thelio-hosted Mechatron Prime CI |
 

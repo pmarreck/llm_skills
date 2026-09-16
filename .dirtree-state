@@ -2,10 +2,14 @@
 ver=1.2
 annotate=[
 	ADR.tsv = Fleet decision log (TSV, printable-binary encoded fields); adr-0001 documents its own format
+	INTENT.md = Purpose and verification boundaries of the shared skills repository
 	MECHATRON_PRIME_CI.md = Portable Mechatron Prime CI target, webhook, and badge policy.
 	PLAN.md = Active and recently completed work for the shared cross-agent skill repository.
 	about-peter = Directory symlink to the private about-peter skill whose SKILL.md remains outside this public repo.
 	capture-collaboration-evidence = Proactively identifies and records artifact-backed cases where human-agent synthesis beats either starting approach.
+	cross-platform-project-build-arch = Cross-agent target output, PATH publication, and bundle build convention
+	cross-platform-project-build-arch/SKILL.md = Approved platform-specific entrypoints and shared build command contract
+	cross-platform-project-build-arch/references/verification-and-migration.md = Acceptance scenarios and scoped rollout checklist for build/PATH migration
 	deep-code-review = Audit a codebase or major subsystem for quality and missed issues at project milestones.
 	dispatch = Dispatch background subagents for substantial tasks, fanning out parallel work with progress checkpointing.
 	erect-agent-stack = Stand up or join a project's agent stack — tmux session + remoted coding agent — in one idempotent command.

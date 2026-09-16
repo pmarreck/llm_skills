@@ -88,6 +88,16 @@ else
 	fail 'collaboration-evidence skill explicitly permits implicit invocation'
 fi
 
+build_skill=cross-platform-project-build-arch
+for required in SKILL.md references/verification-and-migration.md; do
+	installed="$home/.agents/skills/$build_skill/$required"
+	if [ -f "$installed" ] && cmp -s "$ROOT/$build_skill/$required" "$installed"; then
+		pass "Codex zero-copy install exposes $build_skill/$required"
+	else
+		fail "Codex zero-copy install exposes $build_skill/$required"
+	fi
+done
+
 out='' err='' rc=0
 # shellcheck disable=SC2016 # Positional parameters belong to the child Bash.
 capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"

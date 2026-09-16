@@ -1,5 +1,24 @@
 # Plan
 
+## Completed skill: cross-platform project build architecture (2026-09-16)
+
+- [x] Record the approved OS/architecture-specific PATH design and installation
+      trees in `cross-platform-project-build-arch`, with a migration/verification
+      reference. Preserve complete bundles and explicit Nix bootstrap permission.
+- [x] Add a failing zero-copy installation test for both new skill resources;
+      observed two failures before adding them.
+- [x] Add evidence-based repository intent and README discovery; replace stale
+      global build layout instructions with a reference to the skill.
+- [x] Validate skill schema, full suite, isolated Nix check and shared discovery.
+      Completed 2026-09-16 EDT: bundled skill validator passed in a temporary
+      Nix-provided Python environment (no global install); `./test` and
+      `nix build .#checks.x86_64-linux.test --no-link -L` passed. Both live skill
+      discovery links resolve to the same canonical SKILL.md. The new installer
+      assertions failed before the skill existed and pass now. These checks
+      establish documentation/discovery health, not downstream fleet compliance.
+- [ ] Coordinate dotfiles migration and pilot a CLI plus a bundled GUI under
+      separate implementation scope. Documentation does not establish adoption.
+
 ## Completed — Herdr agent orchestration (2026-09-10)
 
 - [x] Replace tmux-first erect-agent-stack and llmsend guidance with Herdr
