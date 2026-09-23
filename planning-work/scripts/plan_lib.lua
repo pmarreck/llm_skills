@@ -14,6 +14,8 @@ int unlink(const char *path);
 char *realpath(const char *path, char *resolved);
 void free(void *ptr);
 char *strerror(int errnum);
+int chmod(const char *path, unsigned int mode);
+unsigned int umask(unsigned int mask);
 ]]
 
 local M = {}
@@ -35,11 +37,40 @@ local function errstr()
 	return ffi.string(ffi.C.strerror(ffi.errno()))
 end
 
--- Replace path with content atomically: a unique mkstemp file in the same
--- directory, every write and the fsync and close checked, then rename. On
--- any failure the temporary file is removed, path is untouched, and
--- (nil, message) is returned.
+-- Permission bits of an existing file (Linux and macOS stat), or nil.
+local function file_mode(path)
+	local q = "'" .. path:gsub("'", "'\\''") .. "'"
+	for _, cmd in ipairs({ "stat -c %a " .. q, "stat -f %Lp " .. q }) do
+		local p = io.popen(cmd .. " 2>/dev/null")
+		if p then
+			local out = p:read("*l")
+			p:close()
+			if out and out:match("^[0-7]+$") then return tonumber(out, 8) end
+		end
+	end
+	return nil
+end
+
+-- Replace the file behind path with content atomically. Symlinks are followed
+-- (the link stays, its target is replaced) and the target keeps its
+-- permission bits; a new file gets the umask default. A unique mkstemp file
+-- in the target's directory takes every checked write, fsync and close, then
+-- is renamed over the target. On any failure the temporary file is removed,
+-- the target is untouched, and (nil, message) is returned. Linux and macOS.
 function M.write_file(path, content)
+	path = M.realpath(path)
+	if not path then return nil, "cannot resolve the directory of the output file" end
+	local mode
+	local existing = io.open(path, "rb")
+	if existing then
+		existing:close()
+		mode = file_mode(path)
+		if not mode then return nil, "cannot read the permission bits of " .. path end
+	else
+		local mask = ffi.C.umask(0)
+		ffi.C.umask(mask)
+		mode = bit.band(0x1b6, bit.bnot(mask)) -- 0666 & ~umask
+	end
 	local dir = path:match("^(.*)/[^/]*$") or "."
 	local template = ffi.new("char[?]", #dir + 32)
 	ffi.copy(template, dir .. "/.plan-tmp.XXXXXX")
@@ -61,6 +92,10 @@ function M.write_file(path, content)
 	if ffi.C.close(fd) ~= 0 then
 		ffi.C.unlink(tmp)
 		return nil, "cannot close " .. tmp .. ": " .. errstr()
+	end
+	if ffi.C.chmod(tmp, mode) ~= 0 then
+		ffi.C.unlink(tmp)
+		return nil, "cannot set permissions on " .. tmp .. ": " .. errstr()
 	end
 	local ok, err = os.rename(tmp, path)
 	if not ok then

@@ -45,7 +45,11 @@ a competing one; the table names the default only.
 ## Scripts
 
 All three are LuaJIT, take the plan path as the final argument (default
-`PLAN.md`), and print usage with `--help`.
+`PLAN.md`), and print usage with `--help`. They use POSIX calls through the
+LuaJIT FFI and support Linux and macOS; native Windows is not supported.
+Supported inputs are readable ordinary files, or symlinks to them, with no
+concurrent writers. Writes follow symlinks: the link stays and its target is
+replaced, keeping the target's permission bits.
 
 - `scripts/plan-unwrap [--check] PLAN.md` joins hard-wrapped continuation lines
   into their list item. `--check` exits 1 when anything is wrapped. Fenced
@@ -58,7 +62,9 @@ All three are LuaJIT, take the plan path as the final argument (default
   and stays. Each retired line gains its section path:
   `- [x] [Section › parent item] text`.
   Safety: a log that resolves to the plan itself (same path, alias or symlink)
-  is refused before anything is written; hardlinks are not detected. Every
+  is refused before anything is written; hardlinks are not detected. Only a
+  log that does not exist starts empty; a log that exists but cannot be read
+  stops the run with both files untouched. Every
   write is checked and goes through a unique temporary file and a rename. The
   log is written and synced before the plan is replaced, so a failure never
   drops completed items: before the log lands both files are untouched, and

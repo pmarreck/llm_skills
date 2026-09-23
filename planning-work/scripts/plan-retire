@@ -109,12 +109,17 @@ for _, item in ipairs(eligible) do
 end
 
 if retired > 0 then
+	-- Only a log that does not exist yet starts empty; any other open or
+	-- read failure stops before either file is touched.
+	local ENOENT = 2
 	local prior = ""
-	local f = io.open(log_path, "rb")
+	local f, open_err, code = io.open(log_path, "rb")
 	if f then
 		prior = f:read("*a")
 		f:close()
-		if not prior then io_fail("cannot read " .. log_path) end
+		if not prior then io_fail("cannot read " .. log_path .. "; nothing was retired") end
+	elseif code ~= ENOENT then
+		io_fail(tostring(open_err) .. "; nothing was retired and " .. path .. " is unchanged")
 	end
 	local buf = {}
 	if prior == "" then buf[#buf + 1] = LOG_HEADER
