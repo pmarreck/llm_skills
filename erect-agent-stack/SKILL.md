@@ -16,6 +16,7 @@ and exceptional cases. tmux is only for explicitly requested legacy work.
 ## CLI
 
 ```bash
+erect-agent-stack --latest-context --json "$project_dir"
 erect-agent-stack --dry-run --json "$project_dir"
 erect-agent-stack --no-attach "$project_dir"
 erect-agent-stack --agent codex --resume "$session_id" --no-attach "$project_dir"
@@ -46,9 +47,39 @@ and emits a human notification. It never types into an agent prompt. The old
 needed. The helper leaves trust/login dialogs untouched and reports unready
 startup; inspect and answer only the authorized project-trust case below.
 
+### Find the newest saved context
+
+Before choosing a fresh backend for a project with uncertain history, run:
+
+```bash
+erect-agent-stack --latest-context --json "$project_dir"
+```
+
+This mode is read-only and does not require Herdr. It inspects bounded native
+metadata and transcript edges for Codex, Claude Code, Grok Build, and Gemini.
+It does not launch, resume, reindex, use the network, create a helper record, or
+read message bodies into its output. Without `--json`, success prints only the
+canonical backend name: `codex`, `claude`, `grok`, or `gemini`.
+
+JSON reports the native session ID, conversation timestamp, source path,
+evidence, provider status, warnings, and separately excluded child sessions.
+Treat `status: "found"` and exit 0 as the only automatic-resume result.
+`none` exits 1, an exact latest-time tie is `ambiguous` and exits 69, and an
+unreadable store or newer unavailable native record is `incomplete` and exits
+74. Never turn `none`, `ambiguous`, or `incomplete` into an implicit fresh
+launch. `none` is evidence for Peter's explicit fresh choice, not permission
+to choose a backend on his behalf.
+
+The result uses native conversation times rather than file mtimes. It accepts
+Codex root sessions from CLI, editor, and exec sources; reports Codex, Claude,
+and Gemini child sessions without selecting them; checks Grok native summaries
+against its search index; and requires exact cwd or native hash evidence. A
+similarly normalized, hyphenated, underscored, copied, or moved path is not a
+match without native relocation metadata.
+
 ## Discover and reuse
 
-1. Verify `test "${HERDR_ENV:-}" = 1`. If absent, stop terminal orchestration
+1. Except for `--latest-context`, verify `test "${HERDR_ENV:-}" = 1`. If absent, stop terminal orchestration
    and ask to resume inside the intended Herdr session. Do not manufacture the
    environment marker or target another client's focused session.
 2. Read `herdr --skill` completely for the installed CLI's contract. Use
