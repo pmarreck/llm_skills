@@ -1,0 +1,140 @@
+#!/usr/bin/env luajit
+-- plan-retire: move completed checkboxes out of PLAN.md into an append-only
+-- log, keeping the N most recently completed items for continuity.
+-- Recency comes from the last YYYY-MM-DD [HH:MM] stamp on the item line;
+-- undated items count as oldest. A done item with an open descendant is
+-- blocked and stays. Each retired item keeps its whole subtree and gains its
+-- section path, e.g. "- [x] [Active › parent item] text".
+-- Safety: the log may not be the plan itself; the log is fully written and
+-- synced before the plan is replaced, and every write is checked. A failure
+-- before the log lands leaves both files untouched; a failure replacing the
+-- plan leaves the retired items in the log (a retry may duplicate them, never
+-- lose them). Exit 1 on an I/O failure, 2 on a usage error.
+-- Usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]
+local dir = (arg[0]:match("^(.*)/[^/]*$") or ".")
+package.path = dir .. "/?.lua;" .. package.path
+local lib = require("plan_lib")
+
+local DEFAULT_KEEP = 10
+local ANCESTOR_MAX = 60
+local LOG_HEADER = "# PLAN log\n\nCompleted PLAN.md items retired by plan-retire, oldest retirement first.\n"
+
+local function usage(msg)
+	io.stderr:write("plan-retire: ", msg, "\n",
+		"usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]\n")
+	os.exit(2)
+end
+
+local function io_fail(msg)
+	io.stderr:write("plan-retire: ", msg, "\n")
+	os.exit(1)
+end
+
+local path, log_path, keep, today = "PLAN.md", nil, DEFAULT_KEEP, os.date("%Y-%m-%d")
+local i = 1
+while i <= #arg do
+	local a = arg[i]
+	if a == "--keep" then
+		keep = tonumber(arg[i + 1] or "")
+		if not keep or keep < 0 or keep % 1 ~= 0 then usage("--keep needs a non-negative integer") end
+		i = i + 1
+	elseif a == "--log" then log_path = arg[i + 1] or usage("--log needs a path"); i = i + 1
+	elseif a == "--date" then
+		today = arg[i + 1] or ""
+		if not today:match("^%d%d%d%d%-%d%d%-%d%d$") then usage("--date needs YYYY-MM-DD") end
+		i = i + 1
+	elseif a == "-h" or a == "--help" then
+		print("plan-retire: move completed PLAN.md checkboxes into docs/PLAN_LOG.md, keeping the newest N")
+		print("usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]")
+		os.exit(0)
+	elseif a:sub(1, 1) == "-" then usage("unknown option " .. a)
+	else path = a end
+	i = i + 1
+end
+if not log_path then
+	local base = path:match("^(.*)/[^/]*$")
+	log_path = (base and base .. "/" or "") .. "docs/PLAN_LOG.md"
+end
+
+local plan_real, log_real = lib.realpath(path), lib.realpath(log_path)
+if not plan_real then usage("cannot resolve " .. path) end
+if plan_real == log_real then usage("the log " .. log_path .. " is the plan itself") end
+
+local lines = lib.read_lines(path)
+if not lines then usage("cannot read " .. path) end
+local kinds = lib.classify(lines)
+local items = lib.items(lines, kinds)
+local eligible, blocked = lib.retirable(items)
+
+local function stamp(line)
+	local key = ""
+	for d, rest in line:gmatch("(%d%d%d%d%-%d%d%-%d%d)(.?.?.?.?.?.?)") do
+		key = d .. " " .. (rest:match("^[ T](%d%d:%d%d)") or "00:00")
+	end
+	return key
+end
+
+local ranked = {}
+for pos, it in ipairs(eligible) do
+	it.key, it.pos = stamp(lines[it.first]), pos
+	ranked[#ranked + 1] = it
+end
+table.sort(ranked, function(a, b) if a.key ~= b.key then return a.key < b.key end return a.pos < b.pos end)
+local retire = {}
+for r = 1, #ranked - keep do retire[ranked[r]] = true end
+
+local retired, drop, entries = 0, {}, {}
+for _, item in ipairs(eligible) do
+	if retire[item] then
+		retired = retired + 1
+		local path_parts = { item.section or "(no section)" }
+		local chain, p = {}, item.parent
+		while p do
+			local t = lines[p.first]:gsub("^[ \t]*[-*+] %[.%]%s*", "")
+			if #t > ANCESTOR_MAX then t = t:sub(1, ANCESTOR_MAX) .. "…" end
+			table.insert(chain, 1, t)
+			p = p.parent
+		end
+		for _, t in ipairs(chain) do path_parts[#path_parts + 1] = t end
+		local head = lines[item.first]:gsub("^[ \t]*[-*+] %[.%]%s*", "")
+		entries[#entries + 1] = "- [x] [" .. table.concat(path_parts, " › ") .. "] " .. head
+		local strip = lines[item.first]:match("^[ \t]*")
+		for n = item.first + 1, item.last do
+			local l = lines[n]
+			if l:sub(1, #strip) == strip then l = l:sub(#strip + 1) end
+			entries[#entries + 1] = l
+		end
+		for n = item.first, item.last do drop[n] = true end
+	end
+end
+
+if retired > 0 then
+	-- Only a log that does not exist yet starts empty; any other open or
+	-- read failure stops before either file is touched.
+	local ENOENT = 2
+	local prior = ""
+	local f, open_err, code = io.open(log_path, "rb")
+	if f then
+		prior = f:read("*a")
+		f:close()
+		if not prior then io_fail("cannot read " .. log_path .. "; nothing was retired") end
+	elseif code ~= ENOENT then
+		io_fail(tostring(open_err) .. "; nothing was retired and " .. path .. " is unchanged")
+	end
+	local buf = {}
+	if prior == "" then buf[#buf + 1] = LOG_HEADER
+	elseif not prior:match("\n$") then buf[#buf + 1] = "\n" end
+	local last_heading
+	for h in prior:gmatch("\n## ([^\n]*)") do last_heading = h end
+	if last_heading ~= "Retired " .. today then buf[#buf + 1] = "\n## Retired " .. today .. "\n\n" end
+	buf[#buf + 1] = table.concat(entries, "\n") .. "\n"
+	local ok, err = lib.write_file(log_path, prior .. table.concat(buf))
+	if not ok then io_fail(err .. "; nothing was retired and " .. path .. " is unchanged") end
+
+	local out = {}
+	for n, line in ipairs(lines) do if not drop[n] then out[#out + 1] = line end end
+	ok, err = lib.write_file(path, lib.join_lines(out))
+	if not ok then io_fail(err .. "; the " .. retired .. " retired items are already in " .. log_path .. " (a retry may duplicate them)") end
+end
+io.stderr:write(string.format("plan-retire: retired %d, kept %d, blocked %d\n",
+	retired, #eligible - retired, blocked))

@@ -33,6 +33,8 @@ annotate=[
 	onboard/SKILL.md = onboard skill: rebuild a dead session's context from its on-disk transcript (converse of handoff)
 	onboard/scripts/collect-claude-context = Bash: day-anchored session selection for a cwd, reduces and concatenates for a summarising subagent
 	onboard/scripts/reduce-claude-transcript = LuaJIT: reduce one Claude session .jsonl to Markdown ~18x smaller; whitelisted record types, unknown = hard error
+	planning-work = PLAN.md discipline: one-line checkboxes, retirement to docs/PLAN_LOG.md, context in docs/plan_context/
+	planning-work/scripts = LuaJIT plan-unwrap, plan-retire and plan-lint sharing the plan_lib.lua line classifier
 	scaffold-zig-project = Scaffold a new greenfield Zig project from scratch.
 	ship = Commit and push known-green work, watch Mechatron Prime CI, or cut a tagged GitHub release.
 	test = Runs the complete llm_skills installer and skill-policy regression suite.
@@ -42,6 +44,7 @@ annotate=[
 	tests/cli/test_memory_titles = Classifies shared/project memory discovery and proves headers ignore VCS and .codescan metadata.
 	tests/cli/test_onboard_collect = tests day-anchored selection: whole newest day, size-floor walk-back, calendar bound, --list/--session
 	tests/cli/test_onboard_reducer = classifier-over-sets tests for the reducer: sensitivity, specificity, payload bound, reduction ratio, drift failure
+	tests/cli/test_planning_work = Classifier-over-sets, unwrap, lint and retire behavior tests for the planning-work scripts
 	tests/cli/test_retired_garnix_guidance = Regression gate preventing shared workflows from resurrecting retired Garnix CI guidance.
 	tests/cli/test_writing_nix_skill = Integration contract for skill discovery, Git input classification, source attribution, and ecosystem comparison.
 	tests/cli/test_zero_copy_install = Integration test for zero-copy Codex skill installation, safe legacy archival, idempotence, and hook retirement.

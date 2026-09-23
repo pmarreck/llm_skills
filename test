@@ -75,6 +75,13 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_planning_work"; then
+	printf 'PASS: planning-work PLAN.md helpers\n'
+else
+	printf 'FAIL: planning-work PLAN.md helpers\n' >&2
+	failures=$((failures + 1))
+fi
+
 if "$ROOT/tests/cli/test_onboard_reducer"; then
 	printf 'PASS: onboard transcript reducer\n'
 else

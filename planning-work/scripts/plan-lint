@@ -1,0 +1,77 @@
+#!/usr/bin/env luajit
+-- plan-lint: reject a PLAN.md that is not headings, a short preamble and
+-- one-line checkboxes, that is oversize, or that holds more completed items
+-- than plan-retire would keep. Exit 1 with one "file:line: kind: text" line
+-- per problem; exit 2 on a usage error.
+-- Usage: plan-lint [--classify] [--max-bytes N] [--max-done N] [--max-preamble N] [PLAN.md]
+local dir = (arg[0]:match("^(.*)/[^/]*$") or ".")
+package.path = dir .. "/?.lua;" .. package.path
+local lib = require("plan_lib")
+
+local DEFAULT_MAX_BYTES = 65536
+local DEFAULT_MAX_DONE = 10
+local DEFAULT_MAX_PREAMBLE = 5
+local USAGE = "usage: plan-lint [--classify] [--max-bytes N] [--max-done N] [--max-preamble N] [PLAN.md]"
+local VIOLATIONS = { continuation = true, bullet = true, prose = true, quote = true, fence = true }
+
+local function usage(msg)
+	io.stderr:write("plan-lint: ", msg, "\n", USAGE, "\n")
+	os.exit(2)
+end
+
+local path, classify = "PLAN.md", false
+local limits = { ["--max-bytes"] = DEFAULT_MAX_BYTES, ["--max-done"] = DEFAULT_MAX_DONE, ["--max-preamble"] = DEFAULT_MAX_PREAMBLE }
+local i = 1
+while i <= #arg do
+	local a = arg[i]
+	if a == "--classify" then classify = true
+	elseif limits[a] then
+		local n = tonumber(arg[i + 1] or "")
+		if not n or n < 0 or n % 1 ~= 0 then usage(a .. " needs a non-negative integer") end
+		limits[a] = n
+		i = i + 1
+	elseif a == "-h" or a == "--help" then
+		print("plan-lint: check that PLAN.md holds only headings, a short preamble and one-line checkboxes")
+		print(USAGE)
+		os.exit(0)
+	elseif a:sub(1, 1) == "-" then usage("unknown option " .. a)
+	else path = a end
+	i = i + 1
+end
+
+local lines, text = lib.read_lines(path)
+if not lines then usage("cannot read " .. path) end
+local kinds = lib.classify(lines)
+
+if classify then
+	for n, line in ipairs(lines) do io.write(kinds[n], "\t", line, "\n") end
+	os.exit(0)
+end
+
+local problems, preamble = 0, 0
+for n, line in ipairs(lines) do
+	local k = kinds[n]
+	if k == "preamble" then preamble = preamble + 1 end
+	if VIOLATIONS[k] then
+		problems = problems + 1
+		io.write(string.format("%s:%d: %s: %s\n", path, n, k, line:sub(1, 100)))
+	end
+end
+if preamble > limits["--max-preamble"] then
+	problems = problems + 1
+	io.write(string.format("%s: preamble: %d lines before the first section exceed %d; move them to docs/plan_context/\n",
+		path, preamble, limits["--max-preamble"]))
+end
+if #text > limits["--max-bytes"] then
+	problems = problems + 1
+	io.write(string.format("%s: size: %d bytes exceeds %d; move context to docs/plan_context/\n", path, #text, limits["--max-bytes"]))
+end
+-- Count exactly what plan-retire can move: a completed subtree is one item and
+-- a completed parent blocked by an open child is not demanded.
+local retirable = lib.retirable(lib.items(lines, kinds))
+if #retirable > limits["--max-done"] then
+	problems = problems + 1
+	io.write(string.format("%s: done: %d retirable completed items exceed %d; run plan-retire --keep %d\n",
+		path, #retirable, limits["--max-done"], limits["--max-done"]))
+end
+os.exit(problems > 0 and 1 or 0)

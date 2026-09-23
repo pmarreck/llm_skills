@@ -1,0 +1,347 @@
+#!/usr/bin/env bash
+
+# Prove the planning-work helpers: line classification over a closed set,
+# wrapped-item unwrapping, lint verdicts, and deterministic retirement.
+
+set -u
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+scripts="$ROOT/planning-work/scripts"
+failures=0
+sandbox=$(mktemp -d "${TMPDIR:-/tmp}/planning-work.XXXXXX")
+
+cleanup() {
+	case "$sandbox" in
+		"${TMPDIR:-/tmp}"/planning-work.*) rm -rf -- "$sandbox" ;;
+	esac
+}
+trap cleanup EXIT
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_equal() {
+	local label="$1" expected="$2" actual="$3"
+	if [ "$actual" != "$expected" ]; then
+		fail "$label"
+		printf '  expected: %q\n' "$expected" >&2
+		printf '  actual:   %q\n' "$actual" >&2
+	fi
+}
+
+# --- 1. plan-lint --classify: every line kind, as a closed set -------------
+cat > "$sandbox/classify.md" <<'EOF'
+# PLAN
+Preamble text is allowed before the first section.
+
+## Active
+- [ ] open item
+- [x] done item (done 2026-09-20)
+- [X] done item, capital X
+	- [ ] nested open item
+  continuation of a wrapped item
+- plain bullet
+* star bullet
+1. numbered
+Loose prose paragraph.
+> quoted note
+```
+fenced
+```
+- [ ]
+EOF
+expected_classes=$(printf '%s\n' \
+	heading preamble blank heading open done done open \
+	continuation bullet bullet bullet prose quote fence fence fence bullet)
+actual_classes=$("$scripts/plan-lint" --classify "$sandbox/classify.md" 2>&1 | cut -f1)
+assert_equal "plan-lint classifies every line kind" "$expected_classes" "$actual_classes"
+
+# --- 2. plan-lint verdicts ---------------------------------------------------
+cat > "$sandbox/clean.md" <<'EOF'
+# PLAN
+Context lives in docs/plan_context/.
+
+## Active
+- [ ] first
+	- [ ] nested
+- [x] finished (done 2026-09-21 10:00 EDT)
+EOF
+"$scripts/plan-lint" "$sandbox/clean.md" > "$sandbox/out" 2> "$sandbox/err"
+assert_equal "clean plan lints with exit 0" "0" "$?"
+assert_equal "clean plan lint is silent on stdout" "" "$(cat "$sandbox/out")"
+
+"$scripts/plan-lint" "$sandbox/classify.md" > "$sandbox/out" 2> "$sandbox/err"
+rc=$?
+[ "$rc" -ne 0 ] || fail "dirty plan must lint non-zero"
+# One diagnostic per violating line: continuation, 4 bullets, prose, quote, 3 fence.
+assert_equal "dirty plan reports each violation" "10" "$(wc -l < "$sandbox/out" | tr -d ' ')"
+grep -q "classify.md:9: continuation" "$sandbox/out" || fail "lint names file:line:kind"
+
+printf '# PLAN\n\n## A\n' > "$sandbox/done.md"
+for i in 1 2 3; do printf -- '- [x] d%s\n' "$i" >> "$sandbox/done.md"; done
+"$scripts/plan-lint" --max-done 2 "$sandbox/done.md" > "$sandbox/out" 2>&1
+[ $? -ne 0 ] || fail "too many done items must lint non-zero"
+grep -q "plan-retire" "$sandbox/out" || fail "done overflow names plan-retire"
+"$scripts/plan-lint" --max-done 3 "$sandbox/done.md" > /dev/null 2>&1 || fail "done count at limit passes"
+
+"$scripts/plan-lint" --max-bytes 10 "$sandbox/clean.md" > "$sandbox/out" 2>&1
+[ $? -ne 0 ] || fail "oversize plan must lint non-zero"
+grep -q "bytes" "$sandbox/out" || fail "oversize diagnostic mentions bytes"
+
+# --- 3. plan-unwrap ----------------------------------------------------------
+cat > "$sandbox/wrapped.md" <<'EOF'
+# PLAN
+
+## Active
+- [ ] **Item one:** first part
+      second part
+      third part.
+	- [ ] nested
+	  nested tail
+- [x] done
+  tail
+- [ ] ratio item
+      >2% of blocks
+      stay joined
+
+Prose stays.
+```
+- [ ] fenced
+  not joined
+```
+EOF
+cat > "$sandbox/unwrapped.expected" <<'EOF'
+# PLAN
+
+## Active
+- [ ] **Item one:** first part second part third part.
+	- [ ] nested nested tail
+- [x] done tail
+- [ ] ratio item >2% of blocks stay joined
+
+Prose stays.
+```
+- [ ] fenced
+  not joined
+```
+EOF
+"$scripts/plan-unwrap" --check "$sandbox/wrapped.md" > /dev/null 2>&1
+assert_equal "plan-unwrap --check flags wrapped items" "1" "$?"
+"$scripts/plan-unwrap" "$sandbox/wrapped.md" 2> /dev/null
+assert_equal "plan-unwrap joins continuations only" \
+	"$(cat "$sandbox/unwrapped.expected")" "$(cat "$sandbox/wrapped.md")"
+"$scripts/plan-unwrap" --check "$sandbox/wrapped.md" > /dev/null 2>&1
+assert_equal "plan-unwrap is idempotent" "0" "$?"
+
+# --- 4. plan-retire ----------------------------------------------------------
+cat > "$sandbox/PLAN.md" <<'EOF'
+# PLAN
+
+## Active
+- [ ] open parent
+	- [x] done child (done 2026-09-01)
+	- [ ] open child
+- [x] newest (done 2026-09-22 09:00 EDT)
+- [x] undated finished
+- [x] older (done 2026-09-10)
+- [x] blocked parent (done 2026-08-01)
+	- [ ] still open under it
+
+## Later
+- [x] middle 2026-09-15
+	note line belonging to middle
+EOF
+mkdir -p "$sandbox/docs"
+"$scripts/plan-retire" --keep 2 --date 2026-09-23 \
+	--log "$sandbox/docs/PLAN_LOG.md" "$sandbox/PLAN.md" 2> "$sandbox/err"
+assert_equal "plan-retire exits 0" "0" "$?"
+cat > "$sandbox/PLAN.expected" <<'EOF'
+# PLAN
+
+## Active
+- [ ] open parent
+	- [ ] open child
+- [x] newest (done 2026-09-22 09:00 EDT)
+- [x] blocked parent (done 2026-08-01)
+	- [ ] still open under it
+
+## Later
+- [x] middle 2026-09-15
+	note line belonging to middle
+EOF
+assert_equal "plan-retire keeps newest N and blocked parents" \
+	"$(cat "$sandbox/PLAN.expected")" "$(cat "$sandbox/PLAN.md")"
+cat > "$sandbox/LOG.expected" <<'EOF'
+# PLAN log
+
+Completed PLAN.md items retired by plan-retire, oldest retirement first.
+
+## Retired 2026-09-23
+
+- [x] [Active › open parent] done child (done 2026-09-01)
+- [x] [Active] undated finished
+- [x] [Active] older (done 2026-09-10)
+EOF
+assert_equal "plan-retire appends retired items with their section path" \
+	"$(cat "$sandbox/LOG.expected")" "$(cat "$sandbox/docs/PLAN_LOG.md")"
+grep -q "retired 3" "$sandbox/err" || fail "plan-retire reports the retired count"
+grep -q "blocked 1" "$sandbox/err" || fail "plan-retire reports blocked parents"
+
+cp "$sandbox/docs/PLAN_LOG.md" "$sandbox/log.before"
+"$scripts/plan-retire" --keep 2 --date 2026-09-24 \
+	--log "$sandbox/docs/PLAN_LOG.md" "$sandbox/PLAN.md" 2> /dev/null
+assert_equal "second retire with nothing eligible leaves log unchanged" \
+	"$(cat "$sandbox/log.before")" "$(cat "$sandbox/docs/PLAN_LOG.md")"
+
+"$scripts/plan-retire" --keep 0 --date 2026-09-25 \
+	--log "$sandbox/docs/PLAN_LOG.md" "$sandbox/PLAN.md" 2> /dev/null
+grep -q '^## Retired 2026-09-25$' "$sandbox/docs/PLAN_LOG.md" || fail "later retirement appends a new dated section"
+grep -q '^	note line belonging to middle$' "$sandbox/docs/PLAN_LOG.md" || fail "retired item keeps its nested block"
+grep -q 'middle' "$sandbox/PLAN.md" && fail "keep 0 retires every eligible item"
+
+"$scripts/plan-retire" --keep nope "$sandbox/PLAN.md" > /dev/null 2>&1
+assert_equal "invalid --keep exits 2" "2" "$?"
+
+# --- 5. Review findings (Einstein, 2026-09-23) --------------------------------
+
+# 5a. Conservation: retire never loses or duplicates a line. Every non-blank
+#     input line ends up in exactly one of PLAN.md and the log (the log line
+#     may gain a "[Section] " prefix), and a blank line between a completed
+#     parent and its nested child keeps the subtree together.
+cat > "$sandbox/cons.md" <<'EOF'
+# PLAN
+
+## Release
+- [x] parent (done 2026-09-01)
+
+	- [x] child after blank (done 2026-09-01)
+	note under child
+- [ ] open item
+EOF
+"$scripts/plan-retire" --keep 0 --date 2026-09-23 --log "$sandbox/cons.log" "$sandbox/cons.md" 2> /dev/null
+assert_equal "retire with a blank-separated child exits 0" "0" "$?"
+for want in 'parent (done 2026-09-01)' 'child after blank (done 2026-09-01)' 'note under child'; do
+	in_plan=$(grep -cF -- "$want" "$sandbox/cons.md")
+	in_log=$(grep -cF -- "$want" "$sandbox/cons.log")
+	[ "$((in_plan + in_log))" -eq 1 ] || fail "conservation: '$want' appears $in_plan times in plan, $in_log in log"
+	[ "$in_log" -eq 1 ] || fail "subtree kept together: '$want' must be retired with its parent"
+done
+grep -qF -- '- [ ] open item' "$sandbox/cons.md" || fail "open item stays in the plan"
+
+# 5b. Lint's done count agrees with retire: a done parent with done children
+#     is one retirable item, and a blocked done parent is not demanded.
+printf '# PLAN\n\n## A\n- [x] parent (done 2026-09-23)\n\t- [x] child one (done 2026-09-23)\n\t- [x] child two (done 2026-09-23)\n' > "$sandbox/nested.md"
+"$scripts/plan-retire" --keep 1 --date 2026-09-23 --log "$sandbox/nested.log" "$sandbox/nested.md" 2> /dev/null
+"$scripts/plan-lint" --max-done 1 "$sandbox/nested.md" > "$sandbox/out" 2>&1
+assert_equal "retire --keep 1 then lint --max-done 1 agree" "0" "$?"
+printf '# PLAN\n\n## A\n- [x] blocked (done 2026-09-23)\n\t- [ ] still open\n' > "$sandbox/blocked.md"
+"$scripts/plan-lint" --max-done 0 "$sandbox/blocked.md" > "$sandbox/out" 2>&1
+assert_equal "a blocked done parent is not counted as retirable" "0" "$?"
+
+# 5c. The log may not be the plan itself (same path, alias or symlink):
+#     refused with exit 2 before anything is written.
+printf '# PLAN\n\n## A\n- [x] done one (done 2026-09-01)\n- [ ] open one\n' > "$sandbox/same.md"
+cp "$sandbox/same.md" "$sandbox/same.orig"
+ln -s same.md "$sandbox/same-link.md"
+for log in "$sandbox/same.md" "$sandbox/./same.md" "$sandbox/same-link.md"; do
+	"$scripts/plan-retire" --keep 0 --log "$log" "$sandbox/same.md" > /dev/null 2>&1
+	assert_equal "log $log equal to the plan is refused" "2" "$?"
+	cmp -s "$sandbox/same.md" "$sandbox/same.orig" || fail "refused retire must leave the plan untouched ($log)"
+done
+
+# 5d. I/O failures never drop completed items. A log that cannot be written
+#     (read-only directory, or a real write failure from a file-size limit)
+#     leaves the plan byte-identical and exits non-zero. A plan that cannot be
+#     replaced after the log was written exits non-zero with every retired
+#     item already in the log (a retry may duplicate, never lose).
+big_plan() {
+	printf '# PLAN\n\n## A\n'
+	for i in $(seq 1 40); do printf -- '- [x] completed item number %s with enough text to be large (done 2026-09-01)\n' "$i"; done
+	printf -- '- [ ] open\n'
+}
+mkdir -p "$sandbox/ro"
+big_plan > "$sandbox/io.md"; cp "$sandbox/io.md" "$sandbox/io.orig"
+chmod 555 "$sandbox/ro"
+"$scripts/plan-retire" --keep 0 --log "$sandbox/ro/PLAN_LOG.md" "$sandbox/io.md" > /dev/null 2>&1
+rc=$?
+chmod 755 "$sandbox/ro"
+[ "$rc" -ne 0 ] || fail "unwritable log directory must exit non-zero"
+cmp -s "$sandbox/io.md" "$sandbox/io.orig" || fail "unwritable log must leave the plan byte-identical"
+
+(
+	trap '' XFSZ
+	ulimit -f 1
+	"$scripts/plan-retire" --keep 0 --log "$sandbox/efbig.log" "$sandbox/io.md" > /dev/null 2>&1
+)
+rc=$?
+[ "$rc" -ne 0 ] || fail "a failed log write (EFBIG) must exit non-zero"
+cmp -s "$sandbox/io.md" "$sandbox/io.orig" || fail "a failed log write must leave the plan byte-identical"
+
+mkdir -p "$sandbox/roplan"
+big_plan > "$sandbox/roplan/PLAN.md"
+chmod 555 "$sandbox/roplan"
+"$scripts/plan-retire" --keep 0 --log "$sandbox/rp.log" "$sandbox/roplan/PLAN.md" > /dev/null 2>&1
+rc=$?
+chmod 755 "$sandbox/roplan"
+[ "$rc" -ne 0 ] || fail "an unreplaceable plan must exit non-zero"
+[ "$(grep -c 'completed item number' "$sandbox/rp.log" 2>/dev/null)" = "40" ] || fail "items must already be in the log when the plan cannot be replaced"
+[ "$(grep -c 'completed item number' "$sandbox/roplan/PLAN.md")" = "40" ] || fail "the unreplaceable plan keeps its items"
+
+# 5e. The preamble is short: more than --max-preamble lines before the first
+#     section is a violation.
+printf '# PLAN\none\ntwo\nthree\nfour\n\n## A\n- [ ] x\n' > "$sandbox/pre.md"
+"$scripts/plan-lint" --max-preamble 3 "$sandbox/pre.md" > "$sandbox/out" 2>&1
+[ $? -ne 0 ] || fail "a long preamble must lint non-zero"
+grep -q preamble "$sandbox/out" || fail "preamble diagnostic names the preamble"
+"$scripts/plan-lint" --max-preamble 4 "$sandbox/pre.md" > /dev/null 2>&1 || fail "a preamble at the limit passes"
+
+# --- 6. Re-review findings (Einstein, 2026-09-23) -----------------------------
+
+# 6a. An existing log that cannot be read is never treated as missing: exit
+#     non-zero, the log keeps its history and the plan is unchanged.
+printf '# PLAN log\n\n## Retired 2026-01-01\n\n- [x] [A] ancient record\n' > "$sandbox/perm.log"
+cp "$sandbox/perm.log" "$sandbox/perm.log.orig"
+printf '# PLAN\n\n## A\n- [x] fresh (done 2026-09-01)\n- [ ] open\n' > "$sandbox/perm.md"
+cp "$sandbox/perm.md" "$sandbox/perm.md.orig"
+chmod 000 "$sandbox/perm.log"
+"$scripts/plan-retire" --keep 0 --log "$sandbox/perm.log" "$sandbox/perm.md" > /dev/null 2>&1
+rc=$?
+chmod 644 "$sandbox/perm.log"
+[ "$rc" -ne 0 ] || fail "an unreadable existing log must exit non-zero"
+cmp -s "$sandbox/perm.log" "$sandbox/perm.log.orig" || fail "an unreadable log keeps its history"
+cmp -s "$sandbox/perm.md" "$sandbox/perm.md.orig" || fail "an unreadable log leaves the plan unchanged"
+mkdir -p "$sandbox/logdir"
+"$scripts/plan-retire" --keep 0 --log "$sandbox/logdir" "$sandbox/perm.md" > /dev/null 2>&1
+[ $? -ne 0 ] || fail "a log path that cannot be read as a file (read error) must exit non-zero"
+cmp -s "$sandbox/perm.md" "$sandbox/perm.md.orig" || fail "a log read error leaves the plan unchanged"
+
+# 6b. Symlinked plan and log are written through: the links stay links, the
+#     canonical targets change, and the targets keep their mode.
+mkdir -p "$sandbox/canon"
+printf '# PLAN\n\n## A\n- [x] linked done (done 2026-09-01)\n- [ ] linked open\n' > "$sandbox/canon/plan.md"
+printf '# PLAN log\n\nexisting\n' > "$sandbox/canon/log.md"
+chmod 640 "$sandbox/canon/plan.md" "$sandbox/canon/log.md"
+ln -s canon/plan.md "$sandbox/linked-plan.md"
+ln -s canon/log.md "$sandbox/linked-log.md"
+"$scripts/plan-retire" --keep 0 --log "$sandbox/linked-log.md" "$sandbox/linked-plan.md" > /dev/null 2>&1
+assert_equal "retire through symlinks exits 0" "0" "$?"
+[ -L "$sandbox/linked-plan.md" ] || fail "the plan symlink stays a symlink"
+[ -L "$sandbox/linked-log.md" ] || fail "the log symlink stays a symlink"
+grep -q 'linked done' "$sandbox/canon/plan.md" && fail "the canonical plan loses the retired item"
+grep -q 'linked done' "$sandbox/canon/log.md" || fail "the canonical log gains the retired item"
+grep -q '^existing$' "$sandbox/canon/log.md" || fail "the canonical log keeps its history"
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+assert_equal "canonical plan keeps its mode" "640" "$(mode_of "$sandbox/canon/plan.md")"
+assert_equal "canonical log keeps its mode" "640" "$(mode_of "$sandbox/canon/log.md")"
+
+printf '# PLAN\n\n## A\n- [ ] wrapped\n  tail\n' > "$sandbox/canon/wrap.md"
+chmod 640 "$sandbox/canon/wrap.md"
+ln -s canon/wrap.md "$sandbox/linked-wrap.md"
+"$scripts/plan-unwrap" "$sandbox/linked-wrap.md" 2> /dev/null
+[ -L "$sandbox/linked-wrap.md" ] || fail "unwrap keeps the symlink"
+grep -qF -- '- [ ] wrapped tail' "$sandbox/canon/wrap.md" || fail "unwrap writes the canonical target"
+assert_equal "unwrap keeps the target's mode" "640" "$(mode_of "$sandbox/canon/wrap.md")"
+
+exit "$failures"
