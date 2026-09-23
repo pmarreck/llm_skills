@@ -1,0 +1,64 @@
+#!/usr/bin/env luajit
+-- plan-lint: reject a PLAN.md that is not headings plus one-line checkboxes.
+-- Usage: plan-lint [--classify] [--max-bytes N] [--max-done N] [PLAN.md]
+local dir = (arg[0]:match("^(.*)/[^/]*$") or ".")
+package.path = dir .. "/?.lua;" .. package.path
+local lib = require("plan_lib")
+
+local DEFAULT_MAX_BYTES = 65536
+local DEFAULT_MAX_DONE = 10
+local VIOLATIONS = { continuation = true, bullet = true, prose = true, quote = true, fence = true }
+
+local function usage(msg)
+	io.stderr:write("plan-lint: ", msg, "\n",
+		"usage: plan-lint [--classify] [--max-bytes N] [--max-done N] [PLAN.md]\n")
+	os.exit(2)
+end
+
+local path, classify = "PLAN.md", false
+local max_bytes, max_done = DEFAULT_MAX_BYTES, DEFAULT_MAX_DONE
+local i = 1
+while i <= #arg do
+	local a = arg[i]
+	if a == "--classify" then classify = true
+	elseif a == "--max-bytes" or a == "--max-done" then
+		local n = tonumber(arg[i + 1] or "")
+		if not n or n < 0 or n % 1 ~= 0 then usage(a .. " needs a non-negative integer") end
+		if a == "--max-bytes" then max_bytes = n else max_done = n end
+		i = i + 1
+	elseif a == "-h" or a == "--help" then
+		print("plan-lint: check that PLAN.md holds only headings, a short preamble and one-line checkboxes")
+		print("usage: plan-lint [--classify] [--max-bytes N] [--max-done N] [PLAN.md]")
+		os.exit(0)
+	elseif a:sub(1, 1) == "-" then usage("unknown option " .. a)
+	else path = a end
+	i = i + 1
+end
+
+local lines, text = lib.read_lines(path)
+if not lines then usage("cannot read " .. path) end
+local kinds = lib.classify(lines)
+
+if classify then
+	for n, line in ipairs(lines) do io.write(kinds[n], "\t", line, "\n") end
+	os.exit(0)
+end
+
+local problems, done = 0, 0
+for n, line in ipairs(lines) do
+	local k = kinds[n]
+	if k == "done" then done = done + 1 end
+	if VIOLATIONS[k] then
+		problems = problems + 1
+		io.write(string.format("%s:%d: %s: %s\n", path, n, k, line:sub(1, 100)))
+	end
+end
+if #text > max_bytes then
+	problems = problems + 1
+	io.write(string.format("%s: size: %d bytes exceeds %d; move context to docs/plan_context/\n", path, #text, max_bytes))
+end
+if done > max_done then
+	problems = problems + 1
+	io.write(string.format("%s: done: %d completed items exceed %d; run plan-retire\n", path, done, max_done))
+end
+os.exit(problems > 0 and 1 or 0)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Planning Work"
+  short_description: "Keep PLAN.md to one-line checkboxes and retire completed items"
+  default_prompt: "Use $planning-work to tidy this project's PLAN.md."

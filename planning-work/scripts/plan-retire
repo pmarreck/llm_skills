@@ -1,0 +1,158 @@
+#!/usr/bin/env luajit
+-- plan-retire: move completed checkboxes out of PLAN.md into an append-only
+-- log, keeping the N most recently completed items for continuity.
+-- Recency comes from the last YYYY-MM-DD [HH:MM] stamp on the item line;
+-- undated items count as oldest. A done item with an open descendant is
+-- blocked and stays. Each retired item keeps its nested block and gains its
+-- section path, e.g. "- [x] [Active › parent item] text".
+-- Usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]
+local dir = (arg[0]:match("^(.*)/[^/]*$") or ".")
+package.path = dir .. "/?.lua;" .. package.path
+local lib = require("plan_lib")
+
+local DEFAULT_KEEP = 10
+local ANCESTOR_MAX = 60
+local LOG_HEADER = "# PLAN log\n\nCompleted PLAN.md items retired by plan-retire, oldest retirement first.\n"
+
+local function usage(msg)
+	io.stderr:write("plan-retire: ", msg, "\n",
+		"usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]\n")
+	os.exit(2)
+end
+
+local path, log_path, keep, today = "PLAN.md", nil, DEFAULT_KEEP, os.date("%Y-%m-%d")
+local i = 1
+while i <= #arg do
+	local a = arg[i]
+	if a == "--keep" then
+		keep = tonumber(arg[i + 1] or "")
+		if not keep or keep < 0 or keep % 1 ~= 0 then usage("--keep needs a non-negative integer") end
+		i = i + 1
+	elseif a == "--log" then log_path = arg[i + 1] or usage("--log needs a path"); i = i + 1
+	elseif a == "--date" then
+		today = arg[i + 1] or ""
+		if not today:match("^%d%d%d%d%-%d%d%-%d%d$") then usage("--date needs YYYY-MM-DD") end
+		i = i + 1
+	elseif a == "-h" or a == "--help" then
+		print("plan-retire: move completed PLAN.md checkboxes into docs/PLAN_LOG.md, keeping the newest N")
+		print("usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]")
+		os.exit(0)
+	elseif a:sub(1, 1) == "-" then usage("unknown option " .. a)
+	else path = a end
+	i = i + 1
+end
+if not log_path then
+	local base = path:match("^(.*)/[^/]*$")
+	log_path = (base and base .. "/" or "") .. "docs/PLAN_LOG.md"
+end
+
+local lines = lib.read_lines(path)
+if not lines then usage("cannot read " .. path) end
+local kinds = lib.classify(lines)
+
+-- Build items: a checkbox line plus following lines indented deeper than it.
+local items, section, stack = {}, nil, {}
+for n, line in ipairs(lines) do
+	local k = kinds[n]
+	if k == "heading" then
+		section = line:gsub("^#+%s*", "")
+		stack = {}
+	elseif k == "open" or k == "done" then
+		local w = lib.indent_width(line)
+		while #stack > 0 and stack[#stack].indent >= w do table.remove(stack) end
+		local item = { first = n, last = n, indent = w, done = (k == "done"), section = section,
+			parent = stack[#stack], open_below = false }
+		items[#items + 1] = item
+		stack[#stack + 1] = item
+	end
+end
+-- Extend each item over its deeper-indented block; mark open descendants.
+for _, item in ipairs(items) do
+	local n = item.first + 1
+	while n <= #lines and kinds[n] ~= "blank" and kinds[n] ~= "heading"
+		and lib.indent_width(lines[n]) > item.indent do
+		n = n + 1
+	end
+	item.last = n - 1
+	if not item.done then
+		local p = item.parent
+		while p do p.open_below = true; p = p.parent end
+	end
+end
+
+local function stamp(line)
+	local key = ""
+	for d, rest in line:gmatch("(%d%d%d%d%-%d%d%-%d%d)(.?.?.?.?.?.?)") do
+		key = d .. " " .. (rest:match("^[ T](%d%d:%d%d)") or "00:00")
+	end
+	return key
+end
+
+local eligible, blocked = {}, 0
+for pos, item in ipairs(items) do
+	if item.done then
+		local ancestor_done = false
+		local p = item.parent
+		while p do if p.done and not p.open_below then ancestor_done = true end; p = p.parent end
+		if item.open_below then blocked = blocked + 1
+		elseif not ancestor_done then
+			item.key, item.pos = stamp(lines[item.first]), pos
+			eligible[#eligible + 1] = item
+		end
+	end
+end
+local ranked = {}
+for _, it in ipairs(eligible) do ranked[#ranked + 1] = it end
+table.sort(ranked, function(a, b) if a.key ~= b.key then return a.key < b.key end return a.pos < b.pos end)
+local retire = {}
+for r = 1, #ranked - keep do retire[ranked[r]] = true end
+
+local retired, drop, entries = 0, {}, {}
+for _, item in ipairs(items) do
+	if retire[item] then
+		retired = retired + 1
+		local path_parts = { item.section or "(no section)" }
+		local chain, p = {}, item.parent
+		while p do
+			local t = lines[p.first]:gsub("^[ \t]*[-*+] %[.%]%s*", "")
+			if #t > ANCESTOR_MAX then t = t:sub(1, ANCESTOR_MAX) .. "…" end
+			table.insert(chain, 1, t)
+			p = p.parent
+		end
+		for _, t in ipairs(chain) do path_parts[#path_parts + 1] = t end
+		local head = lines[item.first]:gsub("^[ \t]*[-*+] %[.%]%s*", "")
+		entries[#entries + 1] = "- [x] [" .. table.concat(path_parts, " › ") .. "] " .. head
+		local strip = lines[item.first]:match("^[ \t]*")
+		for n = item.first + 1, item.last do
+			local l = lines[n]
+			if l:sub(1, #strip) == strip then l = l:sub(#strip + 1) end
+			entries[#entries + 1] = l
+		end
+		for n = item.first, item.last do drop[n] = true end
+	end
+end
+
+if retired > 0 then
+	local existing = io.open(log_path, "rb")
+	local prior = existing and existing:read("*a") or nil
+	if existing then existing:close() end
+	local buf = {}
+	if not prior or prior == "" then buf[#buf + 1] = LOG_HEADER end
+	local last_heading
+	if prior then for h in prior:gmatch("\n## ([^\n]*)") do last_heading = h end end
+	if last_heading ~= "Retired " .. today then
+		buf[#buf + 1] = "\n## Retired " .. today .. "\n\n"
+	end
+	buf[#buf + 1] = table.concat(entries, "\n") .. "\n"
+	local f = io.open(log_path, "ab")
+	if not f then usage("cannot write " .. log_path) end
+	if prior and prior ~= "" and not prior:match("\n$") then f:write("\n") end
+	f:write(table.concat(buf))
+	f:close()
+
+	local out = {}
+	for n, line in ipairs(lines) do if not drop[n] then out[#out + 1] = line end end
+	lib.write_lines(path, out)
+end
+io.stderr:write(string.format("plan-retire: retired %d, kept %d, blocked %d\n",
+	retired, #eligible - retired, blocked))

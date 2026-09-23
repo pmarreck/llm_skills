@@ -1,0 +1,39 @@
+#!/usr/bin/env luajit
+-- plan-unwrap: fold hard-wrapped continuation lines back into their list item
+-- so every checkbox is exactly one line. Fenced blocks and prose are untouched.
+-- Usage: plan-unwrap [--check] [PLAN.md]   (--check: exit 1 if changes needed)
+local dir = (arg[0]:match("^(.*)/[^/]*$") or ".")
+package.path = dir .. "/?.lua;" .. package.path
+local lib = require("plan_lib")
+
+local path, check = "PLAN.md", false
+for _, a in ipairs(arg) do
+	if a == "--check" then check = true
+	elseif a == "-h" or a == "--help" then
+		print("plan-unwrap: join wrapped continuation lines into their list item")
+		print("usage: plan-unwrap [--check] [PLAN.md]")
+		os.exit(0)
+	elseif a:sub(1, 1) == "-" then io.stderr:write("plan-unwrap: unknown option ", a, "\n"); os.exit(2)
+	else path = a end
+end
+
+local lines = lib.read_lines(path)
+if not lines then io.stderr:write("plan-unwrap: cannot read ", path, "\n"); os.exit(2) end
+local kinds = lib.classify(lines)
+
+local out, joined = {}, 0
+for n, line in ipairs(lines) do
+	if kinds[n] == "continuation" and #out > 0 then
+		out[#out] = out[#out]:gsub("%s+$", "") .. " " .. line:gsub("^%s+", ""):gsub("%s+$", "")
+		joined = joined + 1
+	else
+		out[#out + 1] = line
+	end
+end
+
+if check then
+	if joined > 0 then io.stderr:write(string.format("plan-unwrap: %d wrapped lines in %s\n", joined, path)) end
+	os.exit(joined > 0 and 1 or 0)
+end
+if joined > 0 then lib.write_lines(path, out) end
+io.stderr:write(string.format("plan-unwrap: joined %d lines\n", joined))

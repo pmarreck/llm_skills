@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+
+# Prove the planning-work helpers: line classification over a closed set,
+# wrapped-item unwrapping, lint verdicts, and deterministic retirement.
+
+set -u
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+scripts="$ROOT/planning-work/scripts"
+failures=0
+sandbox=$(mktemp -d "${TMPDIR:-/tmp}/planning-work.XXXXXX")
+
+cleanup() {
+	case "$sandbox" in
+		"${TMPDIR:-/tmp}"/planning-work.*) rm -rf -- "$sandbox" ;;
+	esac
+}
+trap cleanup EXIT
+
+fail() {
+	printf 'FAIL: %s\n' "$1" >&2
+	failures=$((failures + 1))
+}
+
+assert_equal() {
+	local label="$1" expected="$2" actual="$3"
+	if [ "$actual" != "$expected" ]; then
+		fail "$label"
+		printf '  expected: %q\n' "$expected" >&2
+		printf '  actual:   %q\n' "$actual" >&2
+	fi
+}
+
+# --- 1. plan-lint --classify: every line kind, as a closed set -------------
+cat > "$sandbox/classify.md" <<'EOF'
+# PLAN
+Preamble text is allowed before the first section.
+
+## Active
+- [ ] open item
+- [x] done item (done 2026-09-20)
+- [X] done item, capital X
+	- [ ] nested open item
+  continuation of a wrapped item
+- plain bullet
+* star bullet
+1. numbered
+Loose prose paragraph.
+> quoted note
+```
+fenced
+```
+- [ ]
+EOF
+expected_classes=$(printf '%s\n' \
+	heading preamble blank heading open done done open \
+	continuation bullet bullet bullet prose quote fence fence fence bullet)
+actual_classes=$("$scripts/plan-lint" --classify "$sandbox/classify.md" 2>&1 | cut -f1)
+assert_equal "plan-lint classifies every line kind" "$expected_classes" "$actual_classes"
+
+# --- 2. plan-lint verdicts ---------------------------------------------------
+cat > "$sandbox/clean.md" <<'EOF'
+# PLAN
+Context lives in docs/plan_context/.
+
+## Active
+- [ ] first
+	- [ ] nested
+- [x] finished (done 2026-09-21 10:00 EDT)
+EOF
+"$scripts/plan-lint" "$sandbox/clean.md" > "$sandbox/out" 2> "$sandbox/err"
+assert_equal "clean plan lints with exit 0" "0" "$?"
+assert_equal "clean plan lint is silent on stdout" "" "$(cat "$sandbox/out")"
+
+"$scripts/plan-lint" "$sandbox/classify.md" > "$sandbox/out" 2> "$sandbox/err"
+rc=$?
+[ "$rc" -ne 0 ] || fail "dirty plan must lint non-zero"
+# One diagnostic per violating line: continuation, 4 bullets, prose, quote, 3 fence.
+assert_equal "dirty plan reports each violation" "10" "$(wc -l < "$sandbox/out" | tr -d ' ')"
+grep -q "classify.md:9: continuation" "$sandbox/out" || fail "lint names file:line:kind"
+
+printf '# PLAN\n\n## A\n' > "$sandbox/done.md"
+for i in 1 2 3; do printf -- '- [x] d%s\n' "$i" >> "$sandbox/done.md"; done
+"$scripts/plan-lint" --max-done 2 "$sandbox/done.md" > "$sandbox/out" 2>&1
+[ $? -ne 0 ] || fail "too many done items must lint non-zero"
+grep -q "plan-retire" "$sandbox/out" || fail "done overflow names plan-retire"
+"$scripts/plan-lint" --max-done 3 "$sandbox/done.md" > /dev/null 2>&1 || fail "done count at limit passes"
+
+"$scripts/plan-lint" --max-bytes 10 "$sandbox/clean.md" > "$sandbox/out" 2>&1
+[ $? -ne 0 ] || fail "oversize plan must lint non-zero"
+grep -q "bytes" "$sandbox/out" || fail "oversize diagnostic mentions bytes"
+
+# --- 3. plan-unwrap ----------------------------------------------------------
+cat > "$sandbox/wrapped.md" <<'EOF'
+# PLAN
+
+## Active
+- [ ] **Item one:** first part
+      second part
+      third part.
+	- [ ] nested
+	  nested tail
+- [x] done
+  tail
+- [ ] ratio item
+      >2% of blocks
+      stay joined
+
+Prose stays.
+```
+- [ ] fenced
+  not joined
+```
+EOF
+cat > "$sandbox/unwrapped.expected" <<'EOF'
+# PLAN
+
+## Active
+- [ ] **Item one:** first part second part third part.
+	- [ ] nested nested tail
+- [x] done tail
+- [ ] ratio item >2% of blocks stay joined
+
+Prose stays.
+```
+- [ ] fenced
+  not joined
+```
+EOF
+"$scripts/plan-unwrap" --check "$sandbox/wrapped.md" > /dev/null 2>&1
+assert_equal "plan-unwrap --check flags wrapped items" "1" "$?"
+"$scripts/plan-unwrap" "$sandbox/wrapped.md" 2> /dev/null
+assert_equal "plan-unwrap joins continuations only" \
+	"$(cat "$sandbox/unwrapped.expected")" "$(cat "$sandbox/wrapped.md")"
+"$scripts/plan-unwrap" --check "$sandbox/wrapped.md" > /dev/null 2>&1
+assert_equal "plan-unwrap is idempotent" "0" "$?"
+
+# --- 4. plan-retire ----------------------------------------------------------
+cat > "$sandbox/PLAN.md" <<'EOF'
+# PLAN
+
+## Active
+- [ ] open parent
+	- [x] done child (done 2026-09-01)
+	- [ ] open child
+- [x] newest (done 2026-09-22 09:00 EDT)
+- [x] undated finished
+- [x] older (done 2026-09-10)
+- [x] blocked parent (done 2026-08-01)
+	- [ ] still open under it
+
+## Later
+- [x] middle 2026-09-15
+	note line belonging to middle
+EOF
+mkdir -p "$sandbox/docs"
+"$scripts/plan-retire" --keep 2 --date 2026-09-23 \
+	--log "$sandbox/docs/PLAN_LOG.md" "$sandbox/PLAN.md" 2> "$sandbox/err"
+assert_equal "plan-retire exits 0" "0" "$?"
+cat > "$sandbox/PLAN.expected" <<'EOF'
+# PLAN
+
+## Active
+- [ ] open parent
+	- [ ] open child
+- [x] newest (done 2026-09-22 09:00 EDT)
+- [x] blocked parent (done 2026-08-01)
+	- [ ] still open under it
+
+## Later
+- [x] middle 2026-09-15
+	note line belonging to middle
+EOF
+assert_equal "plan-retire keeps newest N and blocked parents" \
+	"$(cat "$sandbox/PLAN.expected")" "$(cat "$sandbox/PLAN.md")"
+cat > "$sandbox/LOG.expected" <<'EOF'
+# PLAN log
+
+Completed PLAN.md items retired by plan-retire, oldest retirement first.
+
+## Retired 2026-09-23
+
+- [x] [Active › open parent] done child (done 2026-09-01)
+- [x] [Active] undated finished
+- [x] [Active] older (done 2026-09-10)
+EOF
+assert_equal "plan-retire appends retired items with their section path" \
+	"$(cat "$sandbox/LOG.expected")" "$(cat "$sandbox/docs/PLAN_LOG.md")"
+grep -q "retired 3" "$sandbox/err" || fail "plan-retire reports the retired count"
+grep -q "blocked 1" "$sandbox/err" || fail "plan-retire reports blocked parents"
+
+cp "$sandbox/docs/PLAN_LOG.md" "$sandbox/log.before"
+"$scripts/plan-retire" --keep 2 --date 2026-09-24 \
+	--log "$sandbox/docs/PLAN_LOG.md" "$sandbox/PLAN.md" 2> /dev/null
+assert_equal "second retire with nothing eligible leaves log unchanged" \
+	"$(cat "$sandbox/log.before")" "$(cat "$sandbox/docs/PLAN_LOG.md")"
+
+"$scripts/plan-retire" --keep 0 --date 2026-09-25 \
+	--log "$sandbox/docs/PLAN_LOG.md" "$sandbox/PLAN.md" 2> /dev/null
+grep -q '^## Retired 2026-09-25$' "$sandbox/docs/PLAN_LOG.md" || fail "later retirement appends a new dated section"
+grep -q '^	note line belonging to middle$' "$sandbox/docs/PLAN_LOG.md" || fail "retired item keeps its nested block"
+grep -q 'middle' "$sandbox/PLAN.md" && fail "keep 0 retires every eligible item"
+
+"$scripts/plan-retire" --keep nope "$sandbox/PLAN.md" > /dev/null 2>&1
+assert_equal "invalid --keep exits 2" "2" "$?"
+
+exit "$failures"
