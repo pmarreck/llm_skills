@@ -35,5 +35,8 @@ if check then
 	if joined > 0 then io.stderr:write(string.format("plan-unwrap: %d wrapped lines in %s\n", joined, path)) end
 	os.exit(joined > 0 and 1 or 0)
 end
-if joined > 0 then lib.write_lines(path, out) end
+if joined > 0 then
+	local ok, err = lib.write_file(path, lib.join_lines(out))
+	if not ok then io.stderr:write("plan-unwrap: ", err, "; ", path, " is unchanged\n"); os.exit(1) end
+end
 io.stderr:write(string.format("plan-unwrap: joined %d lines\n", joined))

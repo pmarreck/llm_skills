@@ -3,8 +3,13 @@
 -- log, keeping the N most recently completed items for continuity.
 -- Recency comes from the last YYYY-MM-DD [HH:MM] stamp on the item line;
 -- undated items count as oldest. A done item with an open descendant is
--- blocked and stays. Each retired item keeps its nested block and gains its
+-- blocked and stays. Each retired item keeps its whole subtree and gains its
 -- section path, e.g. "- [x] [Active › parent item] text".
+-- Safety: the log may not be the plan itself; the log is fully written and
+-- synced before the plan is replaced, and every write is checked. A failure
+-- before the log lands leaves both files untouched; a failure replacing the
+-- plan leaves the retired items in the log (a retry may duplicate them, never
+-- lose them). Exit 1 on an I/O failure, 2 on a usage error.
 -- Usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]
 local dir = (arg[0]:match("^(.*)/[^/]*$") or ".")
 package.path = dir .. "/?.lua;" .. package.path
@@ -18,6 +23,11 @@ local function usage(msg)
 	io.stderr:write("plan-retire: ", msg, "\n",
 		"usage: plan-retire [--keep N] [--log docs/PLAN_LOG.md] [--date YYYY-MM-DD] [PLAN.md]\n")
 	os.exit(2)
+end
+
+local function io_fail(msg)
+	io.stderr:write("plan-retire: ", msg, "\n")
+	os.exit(1)
 end
 
 local path, log_path, keep, today = "PLAN.md", nil, DEFAULT_KEEP, os.date("%Y-%m-%d")
@@ -46,39 +56,15 @@ if not log_path then
 	log_path = (base and base .. "/" or "") .. "docs/PLAN_LOG.md"
 end
 
+local plan_real, log_real = lib.realpath(path), lib.realpath(log_path)
+if not plan_real then usage("cannot resolve " .. path) end
+if plan_real == log_real then usage("the log " .. log_path .. " is the plan itself") end
+
 local lines = lib.read_lines(path)
 if not lines then usage("cannot read " .. path) end
 local kinds = lib.classify(lines)
-
--- Build items: a checkbox line plus following lines indented deeper than it.
-local items, section, stack = {}, nil, {}
-for n, line in ipairs(lines) do
-	local k = kinds[n]
-	if k == "heading" then
-		section = line:gsub("^#+%s*", "")
-		stack = {}
-	elseif k == "open" or k == "done" then
-		local w = lib.indent_width(line)
-		while #stack > 0 and stack[#stack].indent >= w do table.remove(stack) end
-		local item = { first = n, last = n, indent = w, done = (k == "done"), section = section,
-			parent = stack[#stack], open_below = false }
-		items[#items + 1] = item
-		stack[#stack + 1] = item
-	end
-end
--- Extend each item over its deeper-indented block; mark open descendants.
-for _, item in ipairs(items) do
-	local n = item.first + 1
-	while n <= #lines and kinds[n] ~= "blank" and kinds[n] ~= "heading"
-		and lib.indent_width(lines[n]) > item.indent do
-		n = n + 1
-	end
-	item.last = n - 1
-	if not item.done then
-		local p = item.parent
-		while p do p.open_below = true; p = p.parent end
-	end
-end
+local items = lib.items(lines, kinds)
+local eligible, blocked = lib.retirable(items)
 
 local function stamp(line)
 	local key = ""
@@ -88,27 +74,17 @@ local function stamp(line)
 	return key
 end
 
-local eligible, blocked = {}, 0
-for pos, item in ipairs(items) do
-	if item.done then
-		local ancestor_done = false
-		local p = item.parent
-		while p do if p.done and not p.open_below then ancestor_done = true end; p = p.parent end
-		if item.open_below then blocked = blocked + 1
-		elseif not ancestor_done then
-			item.key, item.pos = stamp(lines[item.first]), pos
-			eligible[#eligible + 1] = item
-		end
-	end
-end
 local ranked = {}
-for _, it in ipairs(eligible) do ranked[#ranked + 1] = it end
+for pos, it in ipairs(eligible) do
+	it.key, it.pos = stamp(lines[it.first]), pos
+	ranked[#ranked + 1] = it
+end
 table.sort(ranked, function(a, b) if a.key ~= b.key then return a.key < b.key end return a.pos < b.pos end)
 local retire = {}
 for r = 1, #ranked - keep do retire[ranked[r]] = true end
 
 local retired, drop, entries = 0, {}, {}
-for _, item in ipairs(items) do
+for _, item in ipairs(eligible) do
 	if retire[item] then
 		retired = retired + 1
 		local path_parts = { item.section or "(no section)" }
@@ -133,26 +109,27 @@ for _, item in ipairs(items) do
 end
 
 if retired > 0 then
-	local existing = io.open(log_path, "rb")
-	local prior = existing and existing:read("*a") or nil
-	if existing then existing:close() end
-	local buf = {}
-	if not prior or prior == "" then buf[#buf + 1] = LOG_HEADER end
-	local last_heading
-	if prior then for h in prior:gmatch("\n## ([^\n]*)") do last_heading = h end end
-	if last_heading ~= "Retired " .. today then
-		buf[#buf + 1] = "\n## Retired " .. today .. "\n\n"
+	local prior = ""
+	local f = io.open(log_path, "rb")
+	if f then
+		prior = f:read("*a")
+		f:close()
+		if not prior then io_fail("cannot read " .. log_path) end
 	end
+	local buf = {}
+	if prior == "" then buf[#buf + 1] = LOG_HEADER
+	elseif not prior:match("\n$") then buf[#buf + 1] = "\n" end
+	local last_heading
+	for h in prior:gmatch("\n## ([^\n]*)") do last_heading = h end
+	if last_heading ~= "Retired " .. today then buf[#buf + 1] = "\n## Retired " .. today .. "\n\n" end
 	buf[#buf + 1] = table.concat(entries, "\n") .. "\n"
-	local f = io.open(log_path, "ab")
-	if not f then usage("cannot write " .. log_path) end
-	if prior and prior ~= "" and not prior:match("\n$") then f:write("\n") end
-	f:write(table.concat(buf))
-	f:close()
+	local ok, err = lib.write_file(log_path, prior .. table.concat(buf))
+	if not ok then io_fail(err .. "; nothing was retired and " .. path .. " is unchanged") end
 
 	local out = {}
 	for n, line in ipairs(lines) do if not drop[n] then out[#out + 1] = line end end
-	lib.write_lines(path, out)
+	ok, err = lib.write_file(path, lib.join_lines(out))
+	if not ok then io_fail(err .. "; the " .. retired .. " retired items are already in " .. log_path .. " (a retry may duplicate them)") end
 end
 io.stderr:write(string.format("plan-retire: retired %d, kept %d, blocked %d\n",
 	retired, #eligible - retired, blocked))

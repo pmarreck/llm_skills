@@ -204,4 +204,97 @@ grep -q 'middle' "$sandbox/PLAN.md" && fail "keep 0 retires every eligible item"
 "$scripts/plan-retire" --keep nope "$sandbox/PLAN.md" > /dev/null 2>&1
 assert_equal "invalid --keep exits 2" "2" "$?"
 
+# --- 5. Review findings (Einstein, 2026-09-23) --------------------------------
+
+# 5a. Conservation: retire never loses or duplicates a line. Every non-blank
+#     input line ends up in exactly one of PLAN.md and the log (the log line
+#     may gain a "[Section] " prefix), and a blank line between a completed
+#     parent and its nested child keeps the subtree together.
+cat > "$sandbox/cons.md" <<'EOF'
+# PLAN
+
+## Release
+- [x] parent (done 2026-09-01)
+
+	- [x] child after blank (done 2026-09-01)
+	note under child
+- [ ] open item
+EOF
+"$scripts/plan-retire" --keep 0 --date 2026-09-23 --log "$sandbox/cons.log" "$sandbox/cons.md" 2> /dev/null
+assert_equal "retire with a blank-separated child exits 0" "0" "$?"
+for want in 'parent (done 2026-09-01)' 'child after blank (done 2026-09-01)' 'note under child'; do
+	in_plan=$(grep -cF -- "$want" "$sandbox/cons.md")
+	in_log=$(grep -cF -- "$want" "$sandbox/cons.log")
+	[ "$((in_plan + in_log))" -eq 1 ] || fail "conservation: '$want' appears $in_plan times in plan, $in_log in log"
+	[ "$in_log" -eq 1 ] || fail "subtree kept together: '$want' must be retired with its parent"
+done
+grep -qF -- '- [ ] open item' "$sandbox/cons.md" || fail "open item stays in the plan"
+
+# 5b. Lint's done count agrees with retire: a done parent with done children
+#     is one retirable item, and a blocked done parent is not demanded.
+printf '# PLAN\n\n## A\n- [x] parent (done 2026-09-23)\n\t- [x] child one (done 2026-09-23)\n\t- [x] child two (done 2026-09-23)\n' > "$sandbox/nested.md"
+"$scripts/plan-retire" --keep 1 --date 2026-09-23 --log "$sandbox/nested.log" "$sandbox/nested.md" 2> /dev/null
+"$scripts/plan-lint" --max-done 1 "$sandbox/nested.md" > "$sandbox/out" 2>&1
+assert_equal "retire --keep 1 then lint --max-done 1 agree" "0" "$?"
+printf '# PLAN\n\n## A\n- [x] blocked (done 2026-09-23)\n\t- [ ] still open\n' > "$sandbox/blocked.md"
+"$scripts/plan-lint" --max-done 0 "$sandbox/blocked.md" > "$sandbox/out" 2>&1
+assert_equal "a blocked done parent is not counted as retirable" "0" "$?"
+
+# 5c. The log may not be the plan itself (same path, alias or symlink):
+#     refused with exit 2 before anything is written.
+printf '# PLAN\n\n## A\n- [x] done one (done 2026-09-01)\n- [ ] open one\n' > "$sandbox/same.md"
+cp "$sandbox/same.md" "$sandbox/same.orig"
+ln -s same.md "$sandbox/same-link.md"
+for log in "$sandbox/same.md" "$sandbox/./same.md" "$sandbox/same-link.md"; do
+	"$scripts/plan-retire" --keep 0 --log "$log" "$sandbox/same.md" > /dev/null 2>&1
+	assert_equal "log $log equal to the plan is refused" "2" "$?"
+	cmp -s "$sandbox/same.md" "$sandbox/same.orig" || fail "refused retire must leave the plan untouched ($log)"
+done
+
+# 5d. I/O failures never drop completed items. A log that cannot be written
+#     (read-only directory, or a real write failure from a file-size limit)
+#     leaves the plan byte-identical and exits non-zero. A plan that cannot be
+#     replaced after the log was written exits non-zero with every retired
+#     item already in the log (a retry may duplicate, never lose).
+big_plan() {
+	printf '# PLAN\n\n## A\n'
+	for i in $(seq 1 40); do printf -- '- [x] completed item number %s with enough text to be large (done 2026-09-01)\n' "$i"; done
+	printf -- '- [ ] open\n'
+}
+mkdir -p "$sandbox/ro"
+big_plan > "$sandbox/io.md"; cp "$sandbox/io.md" "$sandbox/io.orig"
+chmod 555 "$sandbox/ro"
+"$scripts/plan-retire" --keep 0 --log "$sandbox/ro/PLAN_LOG.md" "$sandbox/io.md" > /dev/null 2>&1
+rc=$?
+chmod 755 "$sandbox/ro"
+[ "$rc" -ne 0 ] || fail "unwritable log directory must exit non-zero"
+cmp -s "$sandbox/io.md" "$sandbox/io.orig" || fail "unwritable log must leave the plan byte-identical"
+
+(
+	trap '' XFSZ
+	ulimit -f 1
+	"$scripts/plan-retire" --keep 0 --log "$sandbox/efbig.log" "$sandbox/io.md" > /dev/null 2>&1
+)
+rc=$?
+[ "$rc" -ne 0 ] || fail "a failed log write (EFBIG) must exit non-zero"
+cmp -s "$sandbox/io.md" "$sandbox/io.orig" || fail "a failed log write must leave the plan byte-identical"
+
+mkdir -p "$sandbox/roplan"
+big_plan > "$sandbox/roplan/PLAN.md"
+chmod 555 "$sandbox/roplan"
+"$scripts/plan-retire" --keep 0 --log "$sandbox/rp.log" "$sandbox/roplan/PLAN.md" > /dev/null 2>&1
+rc=$?
+chmod 755 "$sandbox/roplan"
+[ "$rc" -ne 0 ] || fail "an unreplaceable plan must exit non-zero"
+[ "$(grep -c 'completed item number' "$sandbox/rp.log" 2>/dev/null)" = "40" ] || fail "items must already be in the log when the plan cannot be replaced"
+[ "$(grep -c 'completed item number' "$sandbox/roplan/PLAN.md")" = "40" ] || fail "the unreplaceable plan keeps its items"
+
+# 5e. The preamble is short: more than --max-preamble lines before the first
+#     section is a violation.
+printf '# PLAN\none\ntwo\nthree\nfour\n\n## A\n- [ ] x\n' > "$sandbox/pre.md"
+"$scripts/plan-lint" --max-preamble 3 "$sandbox/pre.md" > "$sandbox/out" 2>&1
+[ $? -ne 0 ] || fail "a long preamble must lint non-zero"
+grep -q preamble "$sandbox/out" || fail "preamble diagnostic names the preamble"
+"$scripts/plan-lint" --max-preamble 4 "$sandbox/pre.md" > /dev/null 2>&1 || fail "a preamble at the limit passes"
+
 exit "$failures"
