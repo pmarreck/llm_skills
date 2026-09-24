@@ -25,6 +25,13 @@ erect-agent-stack --agent claude --fresh --no-attach "$project_dir"
 
 Read `erect-agent-stack --help` for the installed options. A live matching agent
 is always reused, even with `--fresh`. Otherwise it resumes the saved exact ID.
+For new Claude conversations, the selected default is Opus 5.5
+(`claude-opus-5-5`, selected 2026-09-24), unless the owner explicitly requests
+another model. Configure the user's Claude `model` setting so the helper
+inherits it; for a direct fresh launch, pass `--model claude-opus-5-5`.
+Verify the installed client supports that model. Do not silently fall back,
+upgrade the pin on a schedule, or change a running/restored conversation's
+model merely to apply a new-conversation default.
 On first adoption, explicitly select `--fresh`, `--resume ID`, or `--continue`;
 absence of this helper's record does not prove absence of older conversations.
 `--continue` selects the weaker last-in-directory behavior. No speculative fresh
