@@ -83,6 +83,7 @@ for the full mechanism.
 | [`capture-collaboration-evidence`](capture-collaboration-evidence/SKILL.md) | Proactively preserving artifact-backed cases of exceptional human-agent synthesis |
 | [`dispatch`](dispatch/SKILL.md) | Dispatching background subagents for substantial parallel work with checkpointing |
 | [`gather-project-intentions`](gather-project-intentions/SKILL.md) | Establishing project intent, migrating legacy overviews, clarifying goals, and recording substantial later directions |
+| [`clarify-before-building`](clarify-before-building/SKILL.md) | Resolving consequential ambiguity in change requests, preserving decisions, and deferring interviews behind active work when appropriate |
 | [`handoff`](handoff/SKILL.md) | Writing a session handoff document so a fresh agent can pick up the work with full purpose + intent |
 | [`i18n`](i18n/SKILL.md) | Any user-facing UI work involving translations, locales, `--lang`, RTL, or bilingual errors |
 | [`memories`](memories/SKILL.md) | Curate, validate, consolidate, and promote durable shared/project memory lessons |

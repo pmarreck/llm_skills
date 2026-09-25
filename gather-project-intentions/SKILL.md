@@ -47,6 +47,12 @@ agree a scoped migration rather than creating parallel authorities.
 
 ## Interview only where it changes the result
 
+For materially ambiguous change requests within an established project, use
+`clarify-before-building`; it covers focused questions, safe assumptions and
+deferring a new interview behind active work. This skill continues to own the
+project-purpose documents and migrations. Do not rerun project onboarding
+merely because one feature needs clarification.
+
 Ask one to three focused, plain-text questions at a time, grounded in the gaps.
 Examples: who needs this and what cannot they do today; what observable outcome
 would make it useful; what is explicitly excluded; which conflicting goal wins.
