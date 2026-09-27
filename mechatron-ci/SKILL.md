@@ -37,10 +37,16 @@ or reformat a badge URL.
    exact pushed SHA.
 4. Replace any retired Garnix or static Mechatron claim in the README with the
    canonical dynamic badge. Preserve unrelated badges and README content.
-5. Ensure the Thelio hook exists. From Thelio, first run the canonical
-   `--all-owner-repos --dry-run` command; run its live form only when the task
-   authorizes GitHub webhook changes. Never put the webhook secret in a repo,
-   shell argument, log, or chat response.
+5. Ensure the Thelio hook exists. From Thelio only (not via `/ops`):
+
+   ```bash
+   mechatron-ci provision --project REPOSITORY --dry-run
+   mechatron-ci provision --project REPOSITORY
+   ```
+
+   Run the live form only when the task authorizes GitHub webhook changes for
+   that repository. Never put the webhook secret in a repo, shell argument,
+   log, or chat response. `--all-owner-repos` is explicit and never the default.
 6. Push `yolo`, `master`, or `main`, then verify the public endpoint
    `/badges/<REPOSITORY>.json` and the README badge. A new badge appears after
    its first accepted build. Verify `PASSING` only after the worker completes;
@@ -56,8 +62,12 @@ or reformat a badge URL.
    `queue` reports the active job separately from the worker's claimed batch
    and the FIFO waiting queue; it includes enqueue/start timestamps and elapsed
    seconds. `log` reports recent completed outcomes with their terminal run
-   duration. `SHA_PREFIX` is 7–40 hexadecimal characters. Prefer the JSON form
-   for agents; it is a private Tailscale operations API, never a README link.
+   duration. `FAIL` + `nix-build` is a test/build failure. `TIMEOUT` +
+   `github-timeout` is a GitHub brownout after retries; do not debug the
+   project's tests. `STOPPED` is an operator interrupt, OOM, or hang bound that
+   is not a GitHub blip. `SHA_PREFIX` is 7–40 hexadecimal characters. Prefer the
+   JSON form for agents; it is a private Tailscale operations API, never a
+   README link.
 
 ## Boundaries
 

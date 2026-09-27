@@ -10,3 +10,5 @@ CLAUDE*.md
 # Nix build outputs
 /result
 /result-*
+inbox
+synced
