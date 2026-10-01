@@ -98,6 +98,16 @@ for required in SKILL.md references/verification-and-migration.md; do
 	fi
 done
 
+review_skill=deep-code-review
+for required in SKILL.md references/review-lenses.md; do
+	installed="$home/.agents/skills/$review_skill/$required"
+	if [ -f "$installed" ] && cmp -s "$ROOT/$review_skill/$required" "$installed"; then
+		pass "Codex zero-copy install exposes $review_skill/$required"
+	else
+		fail "Codex zero-copy install exposes $review_skill/$required"
+	fi
+done
+
 out='' err='' rc=0
 # shellcheck disable=SC2016 # Positional parameters belong to the child Bash.
 capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"
