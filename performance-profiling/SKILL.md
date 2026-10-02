@@ -41,6 +41,20 @@ Measure the quick-gate budget; under one second is a target, not a reason to
 discard evidence. Long benchmark/fuzz campaigns can stay separate, while
 acceptance-critical checks and discovered regressions remain in `./test`.
 
+## Single-core and multicore cases
+
+Measure each timing workload twice, as separate cases: single-core
+(`cores: 1`) and multicore (12 cores unless the project states otherwise).
+Some code parallelizes underneath (runtimes, allocators, libraries) and some
+does not; one measurement cannot show both. Every case declares `cores`; the
+engine pins Linux runs with `taskset` (override the CPU pool with
+`PERFORMANCE_CPUS`), passes `PERFORMANCE_CORES` to the command, puts the count
+and enforcement method in the cohort, and records the exact CPU list. Requesting
+more cores than are available is an error, not a smaller run. Where affinity
+cannot be enforced (macOS), the record says `unenforced`. Deterministic metrics
+(allocation counts, operations) need not be measured twice unless the code's
+behavior depends on the core count.
+
 ## Non-negotiable comparison boundaries
 
 Measure verified work in an optimized build. Prepare/warm up in the process,

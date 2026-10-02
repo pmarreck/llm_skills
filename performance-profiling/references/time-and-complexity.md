@@ -29,6 +29,12 @@ Store transient load/thermal/frequency evidence separately from stable cohort id
 4. Check the output/work invariant outside the timed region.
 5. Teardown and check ownership separately.
 
+Run timing cases at a declared core count: single-core (1) and multicore (12
+by default), as separate cases with separate cohorts. Pinning also keeps other
+work on a busy host off the measured CPUs only partly: pick the CPU pool
+(`PERFORMANCE_CPUS`) away from known heavy jobs, and treat a noisy sweep as
+inconclusive, never as a shape result.
+
 CPU time is useful for single-threaded compute. Wall time answers user-visible
 parallel/I/O duration; multi-threaded CPU time sums work across threads. Record
 which clock and thread/process scope was used. Keep repetitions long enough for
