@@ -78,11 +78,10 @@ query count, allocations, caching and decompression amplification. Distinguish
 unavoidable work from avoidable asymptotic cost. Measure consequential proposals
 under comparable optimized builds with correctness checks and defined workloads.
 
-Keep fixed-size history alongside scaling evidence where relevant. Finite timing
-sweeps support a growth hypothesis, not a Big-O proof; caches, scheduling, frequency
-and I/O affect ratios. Deterministic operation/allocation counts can be ordinary
-tests. Do not mandate a benchmark for every loop, shrink a correct exhaustive
-test for its iteration count, or hide required gates outside the complete suite.
+Use the shared `performance-profiling` skill for measurement, growth, memory and
+history contracts. Inspect whether the actual checks establish correct work,
+cover meaningful input dimensions and reach the complete suite. Do not mandate
+a benchmark for every loop or shrink a correct exhaustive test for its count.
 
 Review peak/retained memory, stack bounds, descriptors and per-worker buffers under
 realistic concurrency. Allocator choices depend on lifetime, failure behavior and

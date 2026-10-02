@@ -87,6 +87,7 @@ for the full mechanism.
 | [`handoff`](handoff/SKILL.md) | Writing a session handoff document so a fresh agent can pick up the work with full purpose + intent |
 | [`i18n`](i18n/SKILL.md) | Any user-facing UI work involving translations, locales, `--lang`, RTL, or bilingual errors |
 | [`memories`](memories/SKILL.md) | Curate, validate, consolidate, and promote durable shared/project memory lessons |
+| [`performance-profiling`](performance-profiling/SKILL.md) | Runtime/complexity/memory gates, hardware-qualified external history, retry diagnostics and explicit baseline epochs |
 | [`writing-nix`](writing-nix/SKILL.md) | Authoring, packaging, debugging, or contributing Nix code with current ecosystem context |
 | [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Target-separated builds, host-specific PATH entrypoints, Nix/native build alignment, and complete application bundles |
 | [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
@@ -99,7 +100,7 @@ for the full mechanism.
 | [`scaffold-zig-project`](scaffold-zig-project/SKILL.md) | Starting a new Zig project from scratch |
 | [`fix-zig-deps-hash`](fix-zig-deps-hash/SKILL.md) | `nix build` fails with zigDeps/zigDepsHash mismatch after `build.zig.zon` changed |
 | [`llvm-guided-optimization`](llvm-guided-optimization/SKILL.md) | Optimizing Zig hot paths via LLVM IR after algorithmic gains are exhausted |
-| [`zig-microbenchmarks`](zig-microbenchmarks/SKILL.md) | Adding benchmarks, tracking hot-path performance, investigating regressions |
+| [`zig-microbenchmarks`](zig-microbenchmarks/SKILL.md) | Compatibility route to performance-profiling and its Zig adapter guidance |
 
 ### Project-coupled (symlinked in from their home projects)
 

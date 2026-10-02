@@ -73,7 +73,7 @@ Before touching anything, establish baseline metrics. You'll need them for compa
 # End-to-end (hyperfine)
 hyperfine --warmup 3 './zig-out/bin/tool input_file'
 
-# Microbenchmarks (if set up per zig-microbenchmarks skill)
+# Microbenchmarks (under the performance-profiling skill's shared contract)
 zig build microbench
 ```
 

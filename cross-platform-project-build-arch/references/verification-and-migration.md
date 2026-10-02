@@ -66,8 +66,9 @@ binaries just to discover their architecture.
 - A direct command launch adds no architecture-selector process. If performance
   is measured, compare direct binary and published entrypoint on the same host;
   do not present shell PATH lookup itself as zero work.
-- `./test` resolves exact products and runs its complete non-benchmark/non-fuzz
-  suite; stale executables elsewhere on PATH cannot turn a broken build green.
+- `./test` resolves exact products and runs the complete required suite, including
+  bounded profiling gates and fuzz regressions under `performance-profiling`;
+  long campaigns stay separate. Stale PATH executables cannot make it green.
 - Native Windows execution does not depend on Unix symlink privileges. Test on
   Windows; a Linux cross-compile is only compile evidence. Likewise label macOS
   runtime/signature tests pending until performed on macOS.

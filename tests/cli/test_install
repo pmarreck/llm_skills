@@ -108,6 +108,16 @@ for required in SKILL.md references/review-lenses.md; do
 	fi
 done
 
+profiling_skill=performance-profiling
+for required in SKILL.md references/time-and-complexity.md references/memory.md references/history-and-acceptance.md references/language-adapters.md; do
+	installed="$home/.agents/skills/$profiling_skill/$required"
+	if [ -f "$installed" ] && cmp -s "$ROOT/$profiling_skill/$required" "$installed"; then
+		pass "Codex zero-copy install exposes $profiling_skill/$required"
+	else
+		fail "Codex zero-copy install exposes $profiling_skill/$required"
+	fi
+done
+
 out='' err='' rc=0
 # shellcheck disable=SC2016 # Positional parameters belong to the child Bash.
 capture bash -c 'printf "yes\\n" | HOME="$1" "$2/install" --codex' _ "$home" "$ROOT"
