@@ -35,6 +35,7 @@ annotate=[
 	onboard/SKILL.md = onboard skill: rebuild a dead session's context from its on-disk transcript (converse of handoff)
 	onboard/scripts/collect-claude-context = Bash: day-anchored session selection for a cwd, reduces and concatenates for a summarising subagent
 	onboard/scripts/reduce-claude-transcript = LuaJIT: reduce one Claude session .jsonl to Markdown ~18x smaller; whitelisted record types, unknown = hard error
+	performance-profiling = Cross-agent runtime, complexity, memory and external-history benchmark contract
 	planning-work = PLAN.md discipline: one-line checkboxes, retirement to docs/PLAN_LOG.md, context in docs/plan_context/
 	planning-work/scripts = LuaJIT plan-unwrap, plan-retire and plan-lint sharing the plan_lib.lua line classifier
 	scaffold-zig-project = Scaffold a new greenfield Zig project from scratch.
