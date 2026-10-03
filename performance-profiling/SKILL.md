@@ -55,6 +55,24 @@ cannot be enforced (macOS), the record says `unenforced`. Deterministic metrics
 (allocation counts, operations) need not be measured twice unless the code's
 behavior depends on the core count.
 
+## Run-to-run state, process modes and anchors
+
+- Each timed sample starts from the state a real run would see. A program that
+  normally runs once per process gets a settled heap before every sample
+  (collect until the heap stops shrinking, outside timing), so the harness's
+  own earlier runs do not leave garbage-collector or string-table state for
+  later samples to pay for. Record that settling happened. Long-running
+  behavior is a separate steady-state case that runs back to back without it.
+- A JIT can settle into different modes in different processes. Where a
+  workload shows that, declare an odd `processes` count: the engine gates on
+  the median fresh process and keeps all of them. Do not average modes.
+- Size sweeps so the largest point is long enough to measure under load and
+  short enough to keep the gate quick (about 150 ms worked for one LuaJIT
+  project); drop sizes too short to measure rather than widen tolerances.
+- Before accepting an observation as an anchor, check its per-size sample
+  spread and ratios. A noisy smallest size can anchor a wrong ratio that the
+  next clean run then fails against.
+
 ## Non-negotiable comparison boundaries
 
 Measure verified work in an optimized build. Prepare/warm up in the process,
