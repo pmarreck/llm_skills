@@ -82,6 +82,15 @@ else
 	fail 'shared skills resolve through the one repository link'
 fi
 
+for resource in SKILL.md references/syntax.md references/modules.md agents/openai.yaml examples/main.roc examples/Label.roc; do
+	if [ -f "$home/.agents/skills/writing-roc/$resource" ] &&
+		cmp -s "$home/.agents/skills/writing-roc/$resource" "$ROOT/writing-roc/$resource"; then
+		pass "Roc shared discovery preserves $resource"
+	else
+		fail "Roc shared discovery preserves $resource"
+	fi
+done
+
 if [ -f "$home/.codex/skills/.system/system-probe/SKILL.md" ]; then
 	pass 'migration preserves Codex system skills in place'
 else

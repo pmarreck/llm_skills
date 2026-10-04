@@ -58,5 +58,7 @@ annotate=[
 	writing-nix/references/ecosystem-and-community.md = Nix ecosystem lore, project tradeoffs, coexistence boundaries, governance history, and contribution policy.
 	writing-nix/references/sources-and-flakes.md = Git source visibility, path-input behavior, source filtering, and flake-check contracts.
 	writing-nix/scripts/check-flake-inputs = Read-only Git-index classifier for task-required inputs to Git-backed flakes.
+	writing-roc = Compiler-aware Roc quick reference and validated examples for cross-agent use
+	writing-roc/examples = Network-free syntax and imported-module smoke examples
 	zig-microbenchmarks = Add benchmarks to a Zig project, track hot-path performance, and investigate regressions.
 ]

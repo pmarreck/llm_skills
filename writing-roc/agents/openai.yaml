@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Roc"
+  short_description: "Current Roc syntax and compiler-aware development"
+  default_prompt: "Use $writing-roc to write and test Roc code against this project's pinned compiler and platform."
