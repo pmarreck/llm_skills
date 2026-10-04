@@ -5,7 +5,7 @@ description: Design, implement or investigate runtime benchmarks, complexity gat
 
 # Performance profiling
 
-Use one shared measurement/evaluation engine with language adapters. Peter's
+Use one shared measurement/evaluation engine with language adapters. The
 approved contract separates fixed-workload timing, input-growth evidence and
 memory cleanup. An unexpectedly faster or smaller result deserves review too.
 
