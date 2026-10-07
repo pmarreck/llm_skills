@@ -100,6 +100,29 @@ local modules, but not downloaded dependencies. Include required entrypoints
 in the project's complete runner. `dbg value` is a diagnostic statement, not
 an application logging API; optimization may change when diagnostics appear.
 
+## Observed gaps in a 2026-10-06 compiler
+
+Verified on 2026-10-06 against a new-generation compiler with a LuaJIT
+backend that reports `Roc compiler version debug-no-git`, building natively on
+Linux x86_64. Recheck on other builds; these are API gaps, not language rules.
+
+- No integer shift method: `x.shift_right_by(3)` on an `I64` fails with a
+  missing-method error. A signed arithmetic right shift by `n` is floor
+  division by `2^n`: `x.div_floor_by(8192)` gave `-5` for `x = -40001`,
+  matching Bash's `$(( -40001 >> 13 ))`. `//` truncates toward zero
+  (`-40001 // 8192` gave `-4`), so it is not a shift for negative values.
+- No `List.reverse`: `list.reverse()` fails with a missing-method error.
+  Build the reversed result directly, e.g. prepend each piece with
+  `$acc = Str.concat(piece, $acc)`.
+- In a headerless script (`main! = |args| { ... }` with no `app` header, built
+  with `roc build`), `echo!(s)` writes exactly `s` with no trailing newline.
+  End the string with `\n` when one is wanted.
+- `roc check name` for an extensionless file is read as a package shorthand
+  ("Nothing is installed under the name ..."). Write `roc check ./name`.
+- Also confirmed working: `"\u(1b)"` escapes, `while` with `var` state and
+  `Bool.True`/`Bool.False`, `and` in conditions, `I64.to_u64()`,
+  `list.get(i) ?? fallback` and `scale // 2` on positive `I64`s.
+
 ## Verification evidence
 
 On 2026-10-04, the available Linux x86_64 compiler reported
