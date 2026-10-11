@@ -44,9 +44,15 @@ or reformat a badge URL.
    mechatron-ci provision --project REPOSITORY
    ```
 
-   Run the live form only when the task authorizes GitHub webhook changes for
-   that repository. Never put the webhook secret in a repo, shell argument,
-   log, or chat response. `--all-owner-repos` is explicit and never the default.
+   The canonical guide records standing approval for dedicated Mechatron Prime
+   CI webhooks on all current and future `pmarreck/*` repositories, including
+   private repositories and forks. Do not ask for per-project approval again.
+   Preserve unrelated hooks and settings, and follow the guide's credential
+   and privacy boundaries. If the installed CLI rejects `provision`, use the
+   source-script fallback documented there. Missing credential access is a
+   blocker, not a reason to ask for redundant project approval. Never put the
+   webhook secret in a repo, shell argument, log, or chat response.
+   `--all-owner-repos` is explicit and never the default.
 6. Push `yolo`, `master`, or `main`, then verify the public endpoint
    `/badges/<REPOSITORY>.json` and the README badge. A new badge appears after
    its first accepted build. Verify `PASSING` only after the worker completes;
