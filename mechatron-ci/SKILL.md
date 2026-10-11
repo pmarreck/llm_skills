@@ -49,10 +49,13 @@ or reformat a badge URL.
    private repositories and forks. Do not ask for per-project approval again.
    Preserve unrelated hooks and settings, and follow the guide's credential
    and privacy boundaries. If the installed CLI rejects `provision`, use the
-   source-script fallback documented there. Missing credential access is a
-   blocker, not a reason to ask for redundant project approval. Never put the
-   webhook secret in a repo, shell argument, log, or chat response.
-   `--all-owner-repos` is explicit and never the default.
+   source-script fallback documented there. The local Unix-socket broker holds
+   the credentials; project agents need neither sudo nor secret-file access.
+   `--json` returns the sanitized result. A missing/unavailable broker is an
+   infrastructure blocker, not a reason to ask for redundant project approval.
+   Never put the webhook secret in a repo, shell argument, log, or chat response.
+   The ops Services tab reports the provisioner's state and most recent request.
+   Bulk provisioning remains a separate administrator-only helper operation.
 6. Push `yolo`, `master`, or `main`, then verify the public endpoint
    `/badges/<REPOSITORY>.json` and the README badge. A new badge appears after
    its first accepted build. Verify `PASSING` only after the worker completes;

@@ -41,25 +41,39 @@ operation; it is never a side effect of onboarding one project.
    are allowed. The exact pushed commit supplies this file, so changing targets
    needs only a normal repository commit, not a Thelio rebuild.
 
-2. Provision its GitHub webhook from the CI host. Dry-run first, then provision
-   under the standing approval above:
+2. Provision its GitHub webhook from Thelio. This is a local `mechatron-ci`
+   command, not an `/ops` action, and the webhook secret never appears on argv:
 
    ```bash
    mechatron-ci provision --project REPOSITORY --dry-run
    mechatron-ci provision --project REPOSITORY
    ```
 
-   Live provision reads the secret via sudo; approval does not bypass credential
-   access. If credentials are unavailable, report that blocker rather than
-   asking for approval that has already been granted. `--all-owner-repos` is
-   explicit and never the default.
+   `--project` may be `nix_ex` or `pmarreck/nix_ex`. If omitted, an owned GitHub
+   origin is used. Dry-run first, then provision under the standing approval
+   above. Both forms use the local credential-isolated service, with no sudo
+   or client-side access to signing or GitHub credentials. `--json` returns a
+   structured result. There is no fallback that reads secrets in the client.
 
-   If an older installed CLI rejects `provision`, use the source checkout:
+   The service accepts one repository per request, validates its owner against
+   GitHub's returned metadata, and uses only the configured CI endpoint. Bulk
+   discovery remains available to administrators through the underlying
+   `provision-mechatron-webhooks --all-owner-repos` tool, not through the socket.
+
+   If an older installed CLI rejects `provision`, use the source checkout
+   until its package is updated:
 
    ```bash
    "$HOME/Code/mechatron-prime/scripts/mechatron-ci" provision --project REPOSITORY --dry-run
    "$HOME/Code/mechatron-prime/scripts/mechatron-ci" provision --project REPOSITORY
    ```
+
+   The ops Services tab shows the provisioner and its most recent operation,
+   result, and timestamps. Status is sanitized; credentials and raw GitHub
+   errors are never displayed. A failed or disconnected request can be retried:
+   each request starts with a fresh hook preflight. GitHub hides existing hook
+   signing secrets, so an existing hook's secret relies on its provisioning
+   provenance; a hook-list response alone cannot verify signature delivery.
 
 3. Push `yolo`, `master`, or `main`. Its first accepted build creates the badge
    JSON.
