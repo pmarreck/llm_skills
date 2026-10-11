@@ -125,8 +125,15 @@ that recursively calls Nix. Use the `writing-nix` skill when editing Nix code.
 Test graph dependencies need not invoke the literal `./build` script or package
 every platform. Preserve project-required safety profiles; optimized does not
 automatically mean removing runtime safety checks. Benchmarks identify their
-profile explicitly. Prefer hyphenated executable names (`build-all`, not
-`build_all`); preserve compatibility only when the project's users require it.
+profile explicitly.
+
+For executable commands we name, separate words with hyphens (`build-all`,
+`build-and-run`), never underscores (`build_all`, `build_and_run`). Project
+directory names use underscores; executable names do not inherit that convention.
+Preserve established upstream command names. When deliberately migrating a
+legacy script, update its callers, tests, documentation and packaging together;
+preserve compatibility only when the project's users require it. Do not rewrite
+historical receipts to claim a new command name was used in an earlier run.
 
 Reserve root `build` for the executable script. Put Xcode/CMake intermediate
 directories under `.build-work/`; root `Build/` conflicts with `build` on
