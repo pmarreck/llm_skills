@@ -129,7 +129,7 @@ index and your edits leak there instead of staying in your worktree.
 ```bash
 # Detect parent .codescan/ — walk up from the worktree root until found.
 PARENT_CODESCAN=""
-# Worktree/repo root without raw git (blocked by the jj-only hook; jj can't see git worktrees either):
+# Locate the worktree/repo root; Git is the supported SCM.
 # walk up until a .git file (worktree) or dir (repo) is found.
 DIR="$PWD"; while [ "$DIR" != "/" ] && [ ! -e "$DIR/.git" ]; do DIR="$(dirname "$DIR")"; done
 [ -e "$DIR/.git" ] || DIR=""
@@ -177,7 +177,7 @@ the parent will reap orphaned watchers via
 
 When dispatching ≥ 2 agents that'll each modify the same top-level build files, dependency manifests, or lockfiles, prefer giving each its own isolated working copy. The Agent tool supports `isolation: "worktree"` — use it.
 
-Note the distinction: that isolation is a **git worktree** (git-native), *not* a jj workspace. jj has its own analog — `jj workspace add <path>` — but jj cannot see or clean *git* worktrees, which is why the codescan snippet below finds the root via `.git` (not `jj`) and the parent reaps leftovers with `git worktree remove`. For tool-driven dispatch this git-native path is correct and automatic; reach for `jj workspace add` only when isolating working copies **manually** in a jj repo, outside the Agent tool. (Lifecycle: the harness auto-removes its worktree when unchanged. A rare *orphaned* one can only be torn down with `git worktree remove` — the single jj-incompatible plumbing op, a sanctioned raw-git exception per the jj rule, not a silent hook-bypass. Surface it, don't paper over it.)
+Use Git worktrees for both tool-driven and manual isolation; do not create Jujutsu workspaces. Inspect `git worktree list --porcelain` and preserve uncommitted files and unpublished commits before authorized cleanup with `git worktree remove`. A detached review or build worktree can be intentional: do not attach it to a branch already used by another checkout or remove it merely because HEAD is detached.
 
 <remember>
 Worktree rules baked into the preamble already handle the case where you did NOT use worktrees; but worktrees eliminate the coordination hazard entirely.
@@ -198,7 +198,7 @@ This behavior is automatic via the preamble. You do NOT need to do it manually b
 After one or more agents complete, the parent should:
 
 1. Read each agent's `<slug>-final.md` (small, bounded — safe).
-2. Cross-check that final claims match the `jj log` + file state.
+2. Cross-check that final claims match `git log`, `git status` and the actual file state.
 3. For parallel dispatches, check whether any agent reverted another's work and whether that revert was intentional.
 4. If an agent was cut off, spawn a summarizer on its JSONL transcript:
 
