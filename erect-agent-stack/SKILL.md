@@ -9,6 +9,13 @@ Herdr is the default project-agent multiplexer (Peter, 2026-09-10). Keep one
 project per named workspace unless Peter requests another layout. This workflow
 is shared by all agent clients.
 
+The standard project layout has an `AI` tab for the agent and a `CLI` tab with
+a shell in the project directory. The launcher names both when creating a new
+workspace. Preserve extra/custom tabs. During an explicitly requested cleanup,
+numeric default labels may be replaced only after inspecting their processes;
+tab order does not establish which one is the agent. When restoring into two
+shells, select the unique single-pane `AI` tab, not an arbitrary matching cwd.
+
 The dotfiles executable `erect-agent-stack` implements this Herdr workflow.
 Use it for routine launches and reuse; use native controls below for inspection
 and exceptional cases. tmux is only for explicitly requested legacy work.
@@ -98,6 +105,13 @@ match without native relocation metadata.
    `herdr pane list --workspace ID` results. Match canonical cwd as well as
    label/name. A basename alone is insufficient. Resolve ambiguous matches
    with Peter rather than guessing.
+
+A shared provider app-server can inherit another client's `HERDR_PANE_ID`.
+Before repairing identities, cross-check `pane process-info`, the native
+conversation ID and its recorded project directory. A terminal title, saved
+`agent_session`, or inherited pane ID alone is insufficient evidence. Use
+explicit verified pane IDs; do not relabel a wrong conversation as the project
+it was supposed to resume. Preserve clients while separating mistaken mirrors.
 
 Prefer project basename for workspace label and agent name. Herdr agent names
 must match `[a-z][a-z0-9_-]{0,31}` and be unique; record any necessary alias.
