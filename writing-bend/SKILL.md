@@ -34,14 +34,20 @@ Route detail by the actual task:
 - [Primary sources and version evidence](references/sources.md) when checking
   upstream behavior or changing a compiler pin.
 
-## Keep the domain in Bend
+## Pure core and explicit foreign boundaries
 
-Represent state transitions, validation, arithmetic, sampling and canonical
+For an independent Bend implementation, represent state transitions,
+validation, arithmetic, sampling and canonical
 output models as pure Bend functions. Return explicit errors and state after
 the last completed effect. An I/O edge can parse argv, obtain entropy, service
 byte requests, render a canonical model to terminal protocols and write buffers.
 Calling another language's numerical implementation from a host wrapper is
 not an independent Bend implementation.
+
+An intentional mixed-language application can instead use Zig hot kernels.
+Keep that boundary explicit and use the
+[hybrid workflow](references/measurements.md#a-bend-specification-with-zig-kernels)
+to distinguish Bend model proofs from evidence about the foreign implementation.
 
 Choose reusable data deliberately. `is Data` permits copying; `is Type` retains
 affine ownership. A closure cannot be reused merely because its captures are
