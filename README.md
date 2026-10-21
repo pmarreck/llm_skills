@@ -90,6 +90,7 @@ for the full mechanism.
 | [`performance-profiling`](performance-profiling/SKILL.md) | Runtime/complexity/memory gates, hardware-qualified external history, retry diagnostics and explicit baseline epochs |
 | [`writing-nix`](writing-nix/SKILL.md) | Authoring, packaging, debugging, or contributing Nix code with current ecosystem context |
 | [`writing-roc`](writing-roc/SKILL.md) | Current Roc syntax, compiler/platform version guards, pure-core design and tested examples |
+| [`writing-bend`](writing-bend/SKILL.md) | Bend 2 affine types, executable-linked proofs, exact arithmetic, generated-JS/native embedding and tested examples |
 | [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Target-separated builds, host-specific PATH entrypoints, Nix/native build alignment, and complete application bundles |
 | [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
 | [`mechatron-ci`](mechatron-ci/SKILL.md) | Configure or audit a project for Thelio-hosted Mechatron Prime CI |
