@@ -10,5 +10,6 @@ Scope boundaries live in [docs/plan_context/follow-ups.md](docs/plan_context/fol
 
 ## Recently completed
 
+- [x] Extend the cross-platform build skill with canonical implementation selection, one build command with independent scope flags, optional VARIANT paths and migration acceptance cases (done 2026-10-23 13:55 EDT).
 - [x] Create the shared writing-bend skill with pinned official sources, compiler/kernel/backend checks, mutation controls and an independent forward trial (done 2026-10-21 16:54 EDT; delivered by this commit in writing-bend/SKILL.md).
 - [x] Reconcile the October 14 inbox request, archive 42 completed plan entries, preserve deferred scope, and pass plan lint plus the full suite (done 2026-10-21 15:05 EDT).

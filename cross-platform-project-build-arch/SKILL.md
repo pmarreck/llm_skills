@@ -1,6 +1,6 @@
 ---
 name: cross-platform-project-build-arch
-description: Design or migrate cross-platform build scripts, target-separated output trees, PATH-facing executables, and application bundles. Use for copied wrong-platform binaries, Nix/native build alignment, bin or zig-out layout, and build/run/test command conventions. Not a mandate to restructure a project during unrelated work.
+description: Design or migrate cross-platform builds, canonical executable implementations, target-separated outputs and application bundles. Use for CANONICAL_IMPL, build canonize, all-implementations/all-platforms flags, PF/VARIANT layouts, wrong-platform binaries and Nix/native build alignment. Not a mandate to restructure a project during unrelated work.
 ---
 
 # Cross-platform project build architecture
@@ -17,6 +17,9 @@ The fleet naming contract (2026-10-23) is:
 - `OS`: `linux`, `macos`, or `mswin` (all five characters).
 - `ARCH`: `amd64` (AMD and Intel x86-64) or `arm64` (AArch64).
 - `PF`: `<OS>-<ARCH>`, for example `linux-amd64` or `mswin-arm64`.
+- `VARIANT`: `gnu` or `musl` where applicable; otherwise unset and omitted
+  from paths. PF and PLATFORM remain OS-ARCH. VARIANT belongs to the selected
+  build target, not necessarily the machine running the build.
 
 The supported matrix is `macos-arm64`, `linux-amd64`, `linux-arm64`,
 `mswin-amd64`, and `mswin-arm64`. A syntactically valid token is not proof that
@@ -69,9 +72,12 @@ symlink privileges or Bash merely to run a compiled Windows command.
 
 ## Separate the entrypoint from the complete build product
 
-Namespace project-controlled outputs by PF and profile. Where multiple ABIs,
-minimum-OS baselines or CPU variants coexist for one PF, add an explicit variant
-directory below PF rather than overwriting another build. Record the actual
+Namespace project-controlled outputs by PF and profile. Where ABI variants apply,
+use `VARIANT` below PF: `<implementation>-out/<PF>/[<VARIANT>/]<profile>/`.
+Brackets mean optional, not literal. Do not create empty, `none` or `default`
+variant directories. Do not add VARIANT to automatic PATH discovery. Other
+coexisting minimum-OS or CPU configurations need explicit, documented separation;
+do not quietly overload the agreed gnu/musl vocabulary. Record the actual
 compiler target and compatibility requirements in build metadata. For example:
 
 ```text
@@ -138,11 +144,22 @@ that recursively calls Nix. Use the `writing-nix` skill when editing Nix code.
 
 | Command | Contract |
 |---|---|
-| `./build` | Build and publish the compatible host product; optimized by default, explicit debug/test modes |
-| `./build-all` | Build the declared target matrix; report failures and unavailable native builders; preserve the selected host entrypoint |
+| `./build` | Build the canonical implementation for the current platform and publish compatible commands; optimized by default, explicit debug/test modes |
+| `./build canonize IMPL` | Validate and record CANONICAL_IMPL, print confirmation, exit without building or switching commands |
+| `./build --all-impls` / `--all-implementations` | Build every declared implementation for the current platform |
+| `./build --all-plats` / `--all-platforms` | Build the canonical implementation for every declared platform |
+| `./build --all` | Expand both implementation and platform scopes; equivalent to combining the two flags |
 | `./run` | Ensure the selected host build is current, then launch that exact CLI or bundle |
 | `./test` | Run unit/integration/CLI suites against their exact build dependencies; never accidentally test another PATH installation |
 | `./build-and-run` | Optional alias to `./run`; no independent build logic |
+
+For multiple executable implementations or migration from `build-all`, read
+[canonical implementations](references/canonical-implementations.md). It owns
+selection-file handling, namespaced outputs, migration steps and acceptance
+tests. Single-implementation projects need no artificial selection machinery.
+`--all` covers declared supported combinations, not an invented full Cartesian
+product and not every conceivable ABI. Report failures and unavailable required
+builders explicitly; never silently present a partial matrix as complete.
 
 Test graph dependencies need not invoke the literal `./build` script or package
 every platform. Preserve project-required safety profiles; optimized does not
