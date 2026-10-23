@@ -25,11 +25,13 @@ Place distinguishable harmless fixture commands in generic and target-specific
 directories. Exercise the actual path-construction implementation, then resolve
 and invoke commands in isolated shells; do not duplicate its algorithm in tests.
 
-- Linux x86_64 selects only Linux x86_64 plus portable commands; macOS aarch64
-  selects only macOS aarch64 plus portable commands. Cover Linux aarch64 and
-  native Windows architectures using their supported shell adapters.
-- Normalize Darwin, arm64, AMD64 and the implementation's supported aliases.
-  WSL selects Linux. Unknown platforms do not silently default to Linux/x86_64.
+- Linux/x86_64 selects only `bin/linux-amd64/` plus portable `bin/` commands;
+  Darwin/arm64 selects `bin/macos-arm64/`. Cover `linux-arm64`, `mswin-amd64`
+  and `mswin-arm64` through their supported shell adapters.
+- Normalize OS/architecture aliases as a classifier over supported and rejected
+  pairs: Darwin becomes macos, Windows/MSYS/MinGW/Cygwin become mswin, x86_64
+  becomes amd64, and aarch64 becomes arm64. WSL selects linux. Unknown platforms
+  never silently default to linux-amd64; reject unsupported target combinations.
 - With the same command in generic and host-specific locations, the native one
   wins. Preserve the intended precedence between different projects and against
   system/Nix development environments. No empty PATH components.
@@ -54,6 +56,11 @@ binaries just to discover their architecture.
 
 - Build the host CLI, then a foreign target and a different profile. Confirm
   outputs coexist and the originally selected host command remains unchanged.
+- Project-controlled build/release namespaces use `<PF>` and PATH uses
+  `bin/<PF>/`, never the retired `bin/<OS>/<ARCH>/` layout. Verify the compiler
+  still receives its required native triple. Distinct ABI/CPU variants beneath
+  the same PF cannot overwrite one another. Compiler-owned caches retain their
+  tool-required naming.
 - Force a build/verification failure and prove the previous entrypoint still
   works. Test competing publication attempts without timing-dependent sleeps.
 - Inspect ELF, Mach-O (including universal slices), or PE headers and runtime
@@ -94,6 +101,12 @@ switch automatic PATH discovery to the new directories, remove obsolete admitted
 paths, and recheck every recorded command resolution. Coordinate this order with
 the dotfiles owner; an uncoordinated global PATH cutover can hide unmigrated tools.
 Preserve rollback until the owner has verified the migrated commands.
+
+The 2026-10-23 naming decision supersedes both nested `bin/<OS>/<ARCH>/`
+directories and project-controlled build prefixes named only by compiler
+triples. Inventory old paths before migration. Update publication, consumers,
+launchers and PATH together; do not relabel an old product without verifying
+its actual architecture and ABI. Historical receipts remain historical.
 
 Pilot a small CLI and one resource-bearing application bundle. Record commands,
 target/profile, test results, platforms actually exercised and outstanding gaps.

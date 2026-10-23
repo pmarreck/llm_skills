@@ -10,18 +10,38 @@ build/output layout. Preserve intentional cross-build products. Loading this
 skill does not authorize a fleet migration, global PATH edits, deletion, or
 replacement of an upstream project's established build interface.
 
+## Canonical Mecha platform names
+
+The fleet naming contract (2026-10-23) is:
+
+- `OS`: `linux`, `macos`, or `mswin` (all five characters).
+- `ARCH`: `amd64` (AMD and Intel x86-64) or `arm64` (AArch64).
+- `PF`: `<OS>-<ARCH>`, for example `linux-amd64` or `mswin-arm64`.
+
+The supported matrix is `macos-arm64`, `linux-amd64`, `linux-arm64`,
+`mswin-amd64`, and `mswin-arm64`. A syntactically valid token is not proof that
+the project supports that target. `macos-amd64` is outside the default matrix.
+Use `ARCH`, not `CA`, which is ambiguous with Certificate Authority.
+
+Use PF in project-controlled platform identifiers, artifact namespaces, build
+output directories and PATH-facing directories. Translate explicitly at tool
+boundaries: compiler triples such as `x86_64-linux-musl`, Rust targets and Nix
+system names such as `x86_64-linux` keep the spellings their tools require.
+Do not mechanically rename third-party identifiers or compiler-owned caches.
+
 ## Select the host once, when constructing PATH
 
 Expose project commands through:
 
 ```text
-bin/<os>/<arch>/<command>   # native executable or generated symlink
+bin/<PF>/<command>         # native executable or generated symlink
 bin/<command>              # portable script or optional Nix bootstrap fallback
 ```
 
 For a given project, its host-specific directory precedes generic `bin/`.
-Use `linux`, `macos`, and `windows`; normalize `Darwin` to `macos`, `arm64` to
-`aarch64`, and `amd64`/`AMD64` to `x86_64`. WSL uses Linux outputs. Detect the
+Normalize Linux to `linux`, Darwin to `macos`, and native Windows/MSYS/MinGW/
+Cygwin environments to `mswin`; normalize `x86_64`/`amd64`/`AMD64` to `amd64`,
+and `aarch64`/`arm64`/`ARM64` to `arm64`. WSL uses Linux outputs. Detect the
 execution environment, not the remote client or physical machine underneath it.
 Reject unsupported native mappings explicitly rather than guessing a platform;
 portable scripts may remain available.
@@ -37,7 +57,7 @@ scans, Nix evaluation, compilation, or executable-header inspection.
 The normal compiled-command path executes directly, with no added host-selector
 wrapper process or per-invocation compatibility checks. Validate outputs during
 build/publication instead. A copied Mac symlink can remain valid on Linux;
-putting it beneath `bin/macos/aarch64/` keeps it outside Linux PATH selection.
+putting it beneath `bin/macos-arm64/` keeps it outside Linux PATH selection.
 This is an accidental-misexecution control, not a sandbox or a guarantee against
 explicitly invoking a foreign file.
 
@@ -49,21 +69,23 @@ symlink privileges or Bash merely to run a compiled Windows command.
 
 ## Separate the entrypoint from the complete build product
 
-Use a target triple, including ABI where relevant, and an explicit profile
-for real outputs. For example:
+Namespace project-controlled outputs by PF and profile. Where multiple ABIs,
+minimum-OS baselines or CPU variants coexist for one PF, add an explicit variant
+directory below PF rather than overwriting another build. Record the actual
+compiler target and compatibility requirements in build metadata. For example:
 
 ```text
-bin/linux/x86_64/tool -> ../../../zig-out/x86_64-linux-musl/ReleaseFast/bin/tool
-zig-out/x86_64-linux-musl/ReleaseFast/
+bin/linux-amd64/tool -> ../../zig-out/linux-amd64/musl/ReleaseFast/bin/tool
+zig-out/linux-amd64/musl/ReleaseFast/
     bin/tool
     lib/
     include/
     share/
-zig-out/aarch64-macos/ReleaseFast/
+zig-out/macos-arm64/ReleaseFast/
     Applications/Example.app/
-.nix-out/<target>/<profile> -> /nix/store/...-package
-.build-work/<target>/<profile>/
-dist/<version>/<target>/
+.nix-out/<PF>/<profile> -> /nix/store/...-package
+.build-work/<PF>/<profile>/
+dist/<version>/<PF>/
 ```
 
 These are installation trees, not just loose compiler outputs. Retain compiler
@@ -73,7 +95,7 @@ projects assemble one product tree from their native build graphs. Zig's
 product structure under `$out`; `.nix-out/` is a retained output link. Never
 point a writable direct-build prefix through a link into the immutable store.
 
-The PATH-facing OS/architecture pair deliberately hides ABI and profile details.
+The PATH-facing PF deliberately hides ABI and profile details.
 Publication selects a compatible artifact and records what was selected.
 OS/architecture alone cannot prove loader, libc, CPU-feature, minimum-OS, or
 runtime-dependency compatibility. Do not publish `-mcpu=native` outputs as
@@ -93,7 +115,7 @@ and serialize competing publications. Do not delete unrecognized `bin/` files.
 Treat a macOS `.app` directory as a complete product, retaining its executable,
 resources, `Info.plist`, helpers, frameworks, permissions, internal links, and
 signatures. Keep it under `Applications/` in its target/profile product tree.
-A macOS-specific command in `bin/macos/aarch64/` can launch the selected bundle
+A macOS-specific command in `bin/macos-arm64/` can launch the selected bundle
 through `open`; a separate CLI can have a direct executable entrypoint.
 Do not extract the inner executable as a substitute for the application.
 GUI launchers are a platform-specific necessity, not a reason to wrap all CLIs.
