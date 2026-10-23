@@ -1,8 +1,21 @@
 # Mechatron Prime CI
 
 Thelio builds signed GitHub `push` events on `yolo`, `master`, or `main` for
-every `pmarreck/*` repository. Builds are sequential; no GitHub Actions or
-Garnix configuration is needed.
+every `pmarreck/*` repository. The configured policy is two workers consuming
+the shared queue; no GitHub Actions or Garnix configuration is needed.
+
+## Job execution limits and capacity
+
+Owner policy, 2026-10-23: build/CI jobs time out after 30 minutes of execution.
+Exceeding that limit requires explicit permission from the mechatron-prime
+agent, with the project/job, requested bound and reason recorded. Do not remove
+or increase the timeout, or split/retry jobs to evade it. Report queue waiting
+separately from execution.
+
+Two workers allow another job to progress while one is slow or stuck before its
+timeout. Existing CPU/memory limits still apply. Confirm actual deployment and
+enforcement with the infrastructure owner; this policy text alone does not
+establish that the host has activated the changes.
 
 The previously audited fleet keeps its root-owned target fallback during this
 migration. A committed manifest always wins; every new project needs one.

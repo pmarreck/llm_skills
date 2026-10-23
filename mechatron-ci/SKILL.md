@@ -8,8 +8,24 @@ description: Configure or audit a local project for Peter's Thelio-hosted Mechat
 Mechatron Prime exists because **Garnix CI shut down on 2026-07-15** — Garnix was
 acquired by Shopify and switched everything off, taking the fleet's cloud Nix CI
 with it. Peter's Thelio (`mechatron-prime` / `thelio-nixos`) replaced it: a
-self-hosted, single-queue Nix build worker that builds signed GitHub `push`
-events for every `pmarreck/*` repo — no GitHub Actions, no Garnix config.
+self-hosted Nix build service that builds signed GitHub `push` events for
+every `pmarreck/*` repo — no GitHub Actions, no Garnix config.
+
+## Execution budget and worker capacity
+
+Owner policy, 2026-10-23: build/CI jobs have a **30-minute execution timeout**.
+A longer run requires explicit permission from the **mechatron-prime agent**
+before starting or extending it. Give that agent the project, exact job/commit,
+requested bound and reason; record the approved scope. Do not silently increase
+a timeout, remove it, or split/retry work merely to evade the limit. Queue waiting
+is reported separately from execution time.
+
+The CI service is to run **two workers** against the shared queue so a slow or
+stuck job does not consume the only execution slot while awaiting its timeout.
+This means two CI jobs can progress, not unlimited nested compilation. Preserve
+the existing CPU/memory/resource controls. Verify deployed worker capacity and
+timeout enforcement with the infrastructure owner before claiming they are live;
+this policy update is not evidence of service activation.
 
 Read the canonical human guide before acting:
 
@@ -68,12 +84,14 @@ or reformat a badge URL.
    mechatron-ci log --project REPOSITORY --commit SHA_PREFIX --json
    ```
 
-   `queue` reports the active job separately from the worker's claimed batch
-   and the FIFO waiting queue; it includes enqueue/start timestamps and elapsed
+   Inspect active jobs across both workers separately from claimed work
+   and the FIFO waiting queue; the queue API includes enqueue/start timestamps and elapsed
    seconds. `log` reports recent completed outcomes with their terminal run
    duration. `FAIL` + `nix-build` is a test/build failure. `TIMEOUT` +
    `github-timeout` is a GitHub brownout after retries; do not debug the
-   project's tests. `STOPPED` is an operator interrupt, OOM, or hang bound that
+   project's tests for that outcome. An execution-budget timeout is different:
+   inspect the recorded stage/reason and seek an approved exception only when
+   warranted. `STOPPED` is an operator interrupt, OOM, or hang bound that
    is not a GitHub blip. `SHA_PREFIX` is 7–40 hexadecimal characters. Prefer the
    JSON form for agents; it is a private Tailscale operations API, never a
    README link.
@@ -81,7 +99,8 @@ or reformat a badge URL.
 ## Boundaries
 
 - Mechatron accepts only HMAC-signed pushes to `yolo`, `master`, or `main` for
-  `pmarreck/*`; it runs one global sequential queue. GitHub's declared default
+  `pmarreck/*`; two workers consume the shared queue under the policy above.
+  GitHub's declared default
   branch is retained as signed event telemetry, not an admission constraint.
 - Do not edit `/etc/mechatron-prime` policy files or require a host rebuild to
   add a project. The per-repo manifest is the self-service control plane.
