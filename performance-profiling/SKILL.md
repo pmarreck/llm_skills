@@ -1,6 +1,6 @@
 ---
 name: performance-profiling
-description: Design, implement or investigate runtime benchmarks, complexity gates, allocation/memory growth and leak controls, or their measurement history. Use for bm/cg/mg integration and performance regressions; not for unrelated correctness tests or ordinary build work.
+description: Design, implement or investigate runtime benchmarks, complexity gates, allocation/memory growth and leak controls, test-suite feedback latency, or their measurement history. Use for bm/cg/mg integration, slow testing and performance regressions; not for unrelated correctness tests or ordinary build work.
 ---
 
 # Performance profiling
@@ -11,6 +11,7 @@ memory cleanup. An unexpectedly faster or smaller result deserves review too.
 
 Read the references relevant to the task:
 
+- [Feedback latency](references/feedback-latency.md) for test-suite runtime budgets, separate build timing, CI waiting, fixture minimization and actionable agent feedback.
 - [Time and complexity](references/time-and-complexity.md) for workloads,
   startup, clocks, growth sweeps, noise and benchmark commands.
 - [Memory](references/memory.md) for allocator coverage, growth, residuals and RSS.
