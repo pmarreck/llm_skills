@@ -32,6 +32,31 @@ boundaries: compiler triples such as `x86_64-linux-musl`, Rust targets and Nix
 system names such as `x86_64-linux` keep the spellings their tools require.
 Do not mechanically rename third-party identifiers or compiler-owned caches.
 
+## CLI self-identification
+
+Every CLI's one-line `--about` output includes its description, version and
+canonical platform as `PF=<OS>-<ARCH>`. Include `VARIANT=gnu` or `VARIANT=musl`
+separately where applicable; omit VARIANT entirely otherwise. For example:
+
+```text
+tool 1.2.3 — Inspect records; PF=linux-amd64 VARIANT=musl
+tool 1.2.3 — Inspect records; PF=macos-arm64
+```
+
+Compiled executables derive these fields from the actual compilation target,
+not the build host or runtime OS/ARCH/PF/PLATFORM/VARIANT environment variables.
+This stays true under emulation and cross-compilation. Interpreted tools report
+their execution platform with the same mappings; do not claim a compiled target
+for portable source. Compiler triples may be supplementary diagnostic data but
+never substitute for canonical PF. Preserve the one-line contract and existing
+localization; platform tokens are stable identifiers, not translated text.
+
+When migrating a CLI, test its actual `--about` output for exact PF, optional
+VARIANT and one-line output. Include a conflicting runtime environment case for
+compiled binaries, mapping cases across declared targets, and actual executable
+checks on available native/emulated targets. Label cross-build-only evidence as
+such; metadata tests alone do not prove a foreign executable runs.
+
 ## Select the host once, when constructing PATH
 
 Expose project commands through:
