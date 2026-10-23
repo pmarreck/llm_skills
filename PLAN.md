@@ -11,6 +11,7 @@ Scope boundaries live in [docs/plan_context/follow-ups.md](docs/plan_context/fol
 
 ## Recently completed
 
+- [x] Add universal-app-frontend skill with verified GPUI package identities and application evidence, global AGENTS pointer and shared discovery; skill validation and full Nix check passed (done 2026-10-23 19:19 EDT).
 - [x] Require nix build in shared build, language, test-isolation and profiling guidance; reconcile global directives and notify current migration owners; local suite and Nix check passed (done 2026-10-23 18:41 EDT).
 - [x] Update Mechatron Prime CI guidance for a 30-minute job timeout, infrastructure-agent-approved exceptions and two-worker queue consumption (done 2026-10-23 18:30 EDT).
 - [x] Add test-isolation guidance and a Linux read-only filesystem runner; verify write-escape controls locally and in the Nix check, then deliver a scoped adoption handoff to the affected project (done 2026-10-23 18:23 EDT).

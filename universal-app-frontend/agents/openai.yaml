@@ -1,0 +1,4 @@
+interface:
+  display_name: "Universal App Frontend"
+  short_description: "Select compatible GPUI crates and cross-platform app boundaries"
+  default_prompt: "Use $universal-app-frontend to select the frontend dependency family and verify the application architecture before implementing the UI."
