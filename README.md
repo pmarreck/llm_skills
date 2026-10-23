@@ -92,6 +92,7 @@ for the full mechanism.
 | [`writing-roc`](writing-roc/SKILL.md) | Current Roc syntax, compiler/platform version guards, pure-core design and tested examples |
 | [`writing-bend`](writing-bend/SKILL.md) | Bend 2 affine types, executable-linked proofs, exact arithmetic, generated-JS/native embedding and tested examples |
 | [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Target-separated builds, host-specific PATH entrypoints, Nix/native build alignment, and complete application bundles |
+| [`test-isolation`](test-isolation/SKILL.md) | Disposable test state, safe publication tests and a Linux read-only-filesystem execution gate |
 | [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
 | [`mechatron-ci`](mechatron-ci/SKILL.md) | Configure or audit a project for Thelio-hosted Mechatron Prime CI |
 

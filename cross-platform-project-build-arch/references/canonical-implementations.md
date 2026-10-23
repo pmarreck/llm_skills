@@ -81,6 +81,12 @@ without requiring Unix symlink privileges, per the parent skill.
 
 ## Migration and proof
 
+Apply [test-isolation](../../test-isolation/SKILL.md) before running these cases.
+Use disposable project trees, CANONICAL_IMPL files and publication links; never
+exercise canonization or build publication against live project outputs. Compile
+prerequisites once, then test the adapter with confined private outputs. Changing
+cwd or snapshotting live links afterward does not prevent a symlink escape.
+
 1. Inventory implementations, supported targets, commands, existing build-all
    semantics and callers. Preserve a recoverable starting state.
 2. Add failing behavioral tests for selection/scope/publication using recording

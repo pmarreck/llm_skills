@@ -36,7 +36,7 @@
 				gnused
 				luajit
 				ripgrep
-			];
+				] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.bubblewrap ];
 		in {
 			checks = forAllSystems (system:
 				let pkgs = pkgsFor system;
@@ -59,7 +59,7 @@
 							# shebang is rewritten to a store path.
 							patchShebangs ./test ./install ./tests \
 								./memories/scripts ./onboard/scripts \
-								./writing-nix/scripts ./planning-work/scripts
+								./writing-nix/scripts ./planning-work/scripts ./test-isolation/scripts
 
 							# The suite writes sandboxes under TMPDIR and needs a
 							# writable HOME; the sandbox provides neither by default.

@@ -53,6 +53,14 @@ cases private temporary resources. Selected runs help iteration but cannot estab
 full acceptance. Long benchmark/fuzz experiments may have separate commands;
 required bounded gates/regressions still run through the complete suite.
 
+Review test side effects before executing unfamiliar suites. Follow
+[test-isolation](../../test-isolation/SKILL.md): publication/canonization must
+target disposable project trees, with no escaping symlink or absolute path into
+live state. Post-run snapshots are detective, not preventive. Check that cleanup
+owns its targets, real services are stubbed and confinement cannot silently fall
+back. Review total feedback latency as well as execution time; hidden queue waits
+and duplicate build admission are defects even when tests themselves are fast.
+
 ## Idempotency, concurrency and recovery
 
 Test interrupted retries around each effect/checkpoint boundary with the same

@@ -10,6 +10,7 @@ Scope boundaries live in [docs/plan_context/follow-ups.md](docs/plan_context/fol
 
 ## Recently completed
 
+- [x] Add test-isolation guidance and a Linux read-only filesystem runner; verify write-escape controls locally and in the Nix check, then deliver a scoped adoption handoff to the affected project (done 2026-10-23 18:23 EDT).
 - [x] Standardize CLI --about on canonical PF with optional separate VARIANT, actual build-target provenance and migration acceptance cases (done 2026-10-23 15:34 EDT).
 - [x] Extend the cross-platform build skill with canonical implementation selection, one build command with independent scope flags, optional VARIANT paths and migration acceptance cases (done 2026-10-23 13:55 EDT).
 - [x] Create the shared writing-bend skill with pinned official sources, compiler/kernel/backend checks, mutation controls and an independent forward trial (done 2026-10-21 16:54 EDT; delivered by this commit in writing-bend/SKILL.md).

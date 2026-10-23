@@ -5,6 +5,13 @@ set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 failures=0
 
+if "$ROOT/tests/cli/test_isolation"; then
+	printf 'PASS: test isolation adapter contract\n'
+else
+	printf 'FAIL: test isolation adapter contract\n' >&2
+	failures=$((failures + 1))
+fi
+
 if "$ROOT/tests/cli/test_install"; then
 	printf 'PASS: installer integration\n'
 else

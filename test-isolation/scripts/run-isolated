@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Linux filesystem write isolation for already-prepared tests, not build scheduling.
+set -u
+if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
+	printf 'Usage: run-isolated -- COMMAND [ARG...]\nRead-only host view; private HOME, XDG directories and TEST_WORKSPACE. Linux only.\n'
+	exit 0
+fi
+if [ "${1:-}" != -- ] || [ "$#" -lt 2 ]; then
+	printf 'Usage: run-isolated -- COMMAND [ARG...]\n' >&2
+	exit 2
+fi
+shift
+if [ "$(uname -s)" != Linux ]; then
+	printf 'run-isolated: Linux filesystem adapter unavailable; refusing unconfined execution\n' >&2
+	exit 69
+fi
+if ! command -v bwrap >/dev/null 2>&1; then
+	printf 'run-isolated: bubblewrap is required in the Nix environment; refusing unconfined execution\n' >&2
+	exit 69
+fi
+cwd=$(pwd -P) || exit 1
+# Rebinding these roots would cover the private writable scratch mount.
+case "$cwd" in
+	/|/tmp|/run|/proc|/dev|/tmp/test-isolation|/tmp/test-isolation/*)
+		printf 'run-isolated: run from a project directory, not a sandbox infrastructure root\n' >&2
+		exit 2 ;;
+esac
+# Minimal Nix builders may have no /run at all; absent sockets need no masking.
+run_mounts=()
+if [ -d /run ]; then
+	run_mounts=(--tmpfs /run --ro-bind-try /run/current-system /run/current-system)
+fi
+# Child-shell variables intentionally expand only inside the namespace.
+# shellcheck disable=SC2016
+exec bwrap \
+	--ro-bind / / --unshare-all --cap-drop ALL --die-with-parent --new-session \
+	--proc /proc --dev /dev --tmpfs /tmp "${run_mounts[@]}" \
+	--ro-bind "$cwd" "$cwd" --chdir "$cwd" \
+	--unsetenv BASH_ENV --unsetenv ENV \
+	--setenv HOME /tmp/test-isolation/home \
+	--setenv TMPDIR /tmp/test-isolation/tmp \
+	--setenv XDG_CONFIG_HOME /tmp/test-isolation/config \
+	--setenv XDG_DATA_HOME /tmp/test-isolation/data \
+	--setenv XDG_STATE_HOME /tmp/test-isolation/state \
+	--setenv XDG_CACHE_HOME /tmp/test-isolation/cache \
+	--setenv XDG_RUNTIME_DIR /tmp/test-isolation/runtime \
+	--setenv TEST_WORKSPACE /tmp/test-isolation/work \
+	-- bash -c '
+		umask 077
+		mkdir -p "$HOME" "$TMPDIR" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" \
+			"$XDG_STATE_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR" "$TEST_WORKSPACE" || exit 1
+		exec "$@"
+	' isolated-tests "$@"

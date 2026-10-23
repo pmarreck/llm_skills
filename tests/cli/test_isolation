@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -u
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
+runner="$root/test-isolation/scripts/run-isolated"
+if [ ! -x "$runner" ]; then
+	printf 'FAIL: test isolation runner missing\n' >&2
+	exit 1
+fi
+work=$(mktemp -d "${TMPDIR:-/tmp}/isolation-contract.XXXXXX") || exit 1
+# This path is created and owned by this test; never accept it from callers.
+trap 'rm -rf -- "$work"' EXIT
+failures=0
+check() {
+	if "$@"; then :; else
+		printf 'FAIL: %s\n' "$*" >&2
+		failures=$((failures + 1))
+	fi
+}
+if [ "$(uname -s)" != Linux ]; then
+	"$runner" -- true >"$work/out" 2>"$work/err"; rc=$?
+	check test "$rc" -eq 69
+	printf 'Linux adapter unavailable on this OS; refusal contract checked\n'
+	exit "$failures"
+fi
+mkdir -p "$work/missing-dependency"
+# Use the current interpreter so this check does not depend on /bin/sh in Nix.
+printf '#!%s\nprintf "Linux\\n"\n' "$BASH" > "$work/missing-dependency/uname"
+chmod +x "$work/missing-dependency/uname"
+# The child must receive its positional argument literally.
+# shellcheck disable=SC2016
+PATH="$work/missing-dependency" "$BASH" "$runner" -- "$BASH" -c 'printf ran > "$1"' _ "$work/should-not-run" >"$work/out" 2>"$work/err"; rc=$?
+check test "$rc" -eq 69
+check test ! -e "$work/should-not-run"
+mkdir -p "$work/project with spaces/bin/linux-amd64"
+project="$work/project with spaces"
+printf 'original\n' > "$project/CANONICAL_IMPL"
+printf 'original\n' > "$project/product"
+ln -s ../../product "$project/bin/linux-amd64/tool"
+# Independent negative control: this user CAN mutate the disposable target.
+printf 'changed\n' > "$project/bin/linux-amd64/tool"
+check test "$(cat "$project/product")" = changed
+printf 'original\n' > "$project/product"
+
+run() { (cd "$project" && "$runner" -- "$@"); }
+run bash -c 'exit 37' >"$work/out" 2>"$work/err"; rc=$?
+check test "$rc" -eq 37
+run bash -c '
+set -u
+failures=0
+blocked() { if "$@" >"$TMPDIR/out" 2>"$TMPDIR/err"; then failures=$((failures+1)); fi; }
+ln -s "$PWD" "$TEST_WORKSPACE/project-link" || exit 90
+blocked bash -c "printf changed > CANONICAL_IMPL"
+blocked bash -c '\''printf changed > "$1/CANONICAL_IMPL"'\'' _ "$PWD"
+blocked bash -c '\''printf changed > "$TEST_WORKSPACE/project-link/CANONICAL_IMPL"'\''
+blocked bash -c "printf changed > bin/linux-amd64/tool"
+blocked ln -sfn /tmp/replacement bin/linux-amd64/tool
+blocked mv CANONICAL_IMPL moved
+blocked chmod u+w product
+blocked bash -c "printf changed > new-output"
+printf private > "$HOME/state" || exit 91
+printf private > "$XDG_CONFIG_HOME/config" || exit 92
+printf private > "$TEST_WORKSPACE/result" || exit 93
+[ "$(cat "$HOME/state")" = private ] || exit 94
+exit "$failures"
+' >"$work/out" 2>"$work/err"; rc=$?
+check test "$rc" -eq 0
+if [ "$rc" -ne 0 ]; then cat "$work/err" >&2; fi
+check test "$(cat "$project/CANONICAL_IMPL")" = original
+check test "$(cat "$project/product")" = original
+check test "$(readlink "$project/bin/linux-amd64/tool")" = ../../product
+check test ! -e "$project/new-output"
+run bash -c 'test ! -e "$HOME/state" && test ! -e "$TEST_WORKSPACE/result"' >"$work/out" 2>"$work/err"; rc=$?
+check test "$rc" -eq 0
+"$runner" >"$work/out" 2>"$work/err"; rc=$?
+check test "$rc" -eq 2
+printf 'Test isolation: %s failure(s)\n' "$failures"
+exit "$failures"
