@@ -16,7 +16,7 @@ project's `lean-toolchain`, Nix input, or package derivation first and run
 `lean --version` plus `lake --version` through that environment. Do not search
 the Nix store or silently use an ambient Elan toolchain.
 
-For this fleet, prefer the project's Nix derivation. If none exists, add one and
+For this fleet, require the project's Nix derivation. If none exists, add one and
 pin an exact Lean version before adopting syntax or APIs. Check the matching
 [Lean reference](https://lean-lang.org/doc/reference/latest/) and the pinned
 release's source/API when memory and the compiler disagree.
@@ -93,8 +93,11 @@ tradeoff and preserve both paths when that is useful.
 
 ## Build and verification floor
 
-Use Lake through the pinned environment and make the canonical project runner
-invoke it. A serious proof-oriented package should normally gate:
+Use `nix build` as the canonical build path, with Lake invoked inside the
+derivation. Follow `cross-platform-project-build-arch`; do not maintain an
+optional non-Nix backend. The commands below describe the inner build/check
+steps, not a second contributor build recipe. A proof-oriented package should
+normally gate:
 
 ```text
 lake build

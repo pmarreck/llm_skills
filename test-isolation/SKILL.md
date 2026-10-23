@@ -31,9 +31,12 @@ those things either. Global guidance delegates the detailed contract here.
 
 ## Separate preparation from exercising side effects
 
-One `./test` entrypoint still owns the full suite. Prepare dependencies and
-compile its exact binaries once, using explicit cache/output destinations and
+One `./test` entrypoint still owns the full suite. Prepare dependencies and exact
+test binaries once through `nix build`, using declared package/check outputs and
 the existing resource budget. Then execute behavioral tests in confinement.
+Language compilers run inside derivations; do not maintain a direct-build test
+preparation fallback. A check derivation may execute its suite directly without
+recursively invoking the outer Nix preparation wrapper.
 Preparation is not permission to publish into live `bin/` or modify CANONICAL_IMPL.
 Test the real build/publication adapter using disposable roots and prepared
 artifacts; isolate build caches when their mutation is itself under test.

@@ -67,9 +67,14 @@ binaries just to discover their architecture.
   dependencies. Do not accept a manifest copied from the build command as the
   only target oracle. Check declared libc/loader and CPU baseline assumptions.
 - Changing flags/toolchains cannot reuse stale intermediates incorrectly.
-  Native and Nix build destinations cannot overwrite one another or write
-  through a store symlink. Generated output/links are ignored without hiding
+  Nix output links and writable test/release staging cannot overwrite one another
+  or write through a store symlink. Generated output/links are ignored without hiding
   source-controlled portable scripts or launchers.
+- `./build` invokes declared Nix package outputs for every supported scope;
+  absence or failure of Nix never triggers a direct compiler fallback. Retire
+  optional-Nix switches and duplicate contributor recipes together with callers.
+  Exercise a real Nix build and inspect the selected output; devShell compilation
+  alone is not acceptance evidence.
 - A direct command launch adds no architecture-selector process. If performance
   is measured, compare direct binary and published entrypoint on the same host;
   do not present shell PATH lookup itself as zero work.

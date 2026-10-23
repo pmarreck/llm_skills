@@ -1,6 +1,6 @@
 ---
 name: cross-platform-project-build-arch
-description: Design or migrate cross-platform builds, canonical executable implementations, target-separated outputs and application bundles. Use for CANONICAL_IMPL, build canonize, all-implementations/all-platforms flags, PF/VARIANT layouts, wrong-platform binaries and Nix/native build alignment. Not a mandate to restructure a project during unrelated work.
+description: Design or migrate Nix-required cross-platform builds, canonical executable implementations, target-separated outputs and application bundles. Use for nix build integration, CANONICAL_IMPL, build canonize, implementation/platform scope flags, PF/VARIANT layouts and wrong-platform binaries. Not a mandate to restructure a project during unrelated work.
 ---
 
 # Cross-platform project build architecture
@@ -124,7 +124,7 @@ caches separately (`.zig-cache/`, Cargo's cache/output tree, etc.). Mixed-langua
 projects assemble one product tree from their native build graphs. Zig's
 `--prefix` selects its installation destination. Nix packages expose the same
 product structure under `$out`; `.nix-out/` is a retained output link. Never
-point a writable direct-build prefix through a link into the immutable store.
+point a writable scratch prefix through a link into the immutable store.
 
 The PATH-facing PF deliberately hides ABI and profile details.
 Publication selects a compatible artifact and records what was selected.
@@ -158,24 +158,47 @@ products. Release archives/installers belong in `dist/`, never on PATH.
 Cross-compiling a binary does not prove that its bundle runs or is signed;
 declare native builder/SDK/signing requirements and untested platforms honestly.
 
-## Use one build graph with thin commands
+## Require Nix builds with thin commands
 
-Keep the native build graph authoritative (`build.zig`, Cargo, CMake, etc.).
-Nix pins toolchains/dependencies and packages that graph. For projects adopting
-this convention, top-level `./build` defaults to Nix and may expose an explicit
-`--backend=direct` path; document the equivalent native command so Nix is not
-required for contributors. Derivations call the native builder, never a wrapper
-that recursively calls Nix. Use the `writing-nix` skill when editing Nix code.
+Owner decision, 2026-10-23: **`nix build` is the canonical build operation**.
+Nix is required for development, CI and release builds, not an optional backend.
+`flake.nix` and its lock file select toolchains, dependencies and package/check
+outputs. Top-level `./build` selects those outputs, invokes `nix build`, then
+verifies and publishes the resulting artifacts. Remove `--backend=direct`,
+automatic non-Nix fallback and a parallel contributor build recipe during
+migration. Missing Nix is an actionable error, never a reason to switch builders.
+
+Keep language build graphs (`build.zig`, Cargo, CMake, etc.) as implementation
+details called by derivations. Derivations never call a wrapper that recursively
+invokes Nix. `nix develop` supplies tools for editing, debugging and running
+prepared artifacts; compiling inside a devShell alone does not satisfy this
+build contract. Targeted compiler diagnostics are experiments, not an alternate
+supported build backend or release qualification. Use `writing-nix` for Nix code.
+
+Expose compiled test prerequisites as Nix outputs too. `./test` prepares them
+once through Nix, then runs the complete suite with disposable state; it must
+not rebuild through a direct backend. Nix checks may run tests inside derivations
+without recursively calling the outer preparation wrapper. Host-dependent GUI,
+hardware and fresh performance checks can execute the Nix-built artifacts outside
+the sandbox, with explicit results and the existing isolation/resource controls.
+
+Build host and target remain distinct. Windows artifacts are built through Nix
+on WSL or a suitable remote/cross builder; native Windows runtime tests remain
+required where specified. Declare required macOS builders and SDKs honestly.
+Credentialed signing/notarization may be a separate release step over a staged
+Nix-built product; it cannot mutate the store or quietly replace the build.
+Requiring Nix for builders does not require end users of distributed applications
+to install Nix. Preserve portable release products and their runtime checks.
 
 | Command | Contract |
 |---|---|
-| `./build` | Build the canonical implementation for the current platform and publish compatible commands; optimized by default, explicit debug/test modes |
+| `./build` | Invoke nix build for the canonical implementation/current platform and publish compatible commands; optimized by default, explicit debug/test modes |
 | `./build canonize IMPL` | Validate and record CANONICAL_IMPL, print confirmation, exit without building or switching commands |
 | `./build --all-impls` / `--all-implementations` | Build every declared implementation for the current platform |
 | `./build --all-plats` / `--all-platforms` | Build the canonical implementation for every declared platform |
 | `./build --all` | Expand both implementation and platform scopes; equivalent to combining the two flags |
 | `./run` | Ensure the selected host build is current, then launch that exact CLI or bundle |
-| `./test` | Run unit/integration/CLI suites against their exact build dependencies; never accidentally test another PATH installation |
+| `./test` | Prepare exact prerequisites with Nix, then run all required suites; never test a stale PATH installation or publish into live project state |
 | `./build-and-run` | Optional alias to `./run`; no independent build logic |
 
 For multiple executable implementations or migration from `build-all`, read

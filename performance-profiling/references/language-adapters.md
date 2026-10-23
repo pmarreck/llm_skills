@@ -5,6 +5,11 @@ benchmark output. See the tool's protocol and working pilot before creating an
 adapter. Keep the kernel independent of storage/history policy. Use proper JSON
 serialization, and return nonzero on invalid work, clock failure or crash.
 
+Build benchmark/test executables through declared Nix outputs using `nix build`.
+Language build graphs remain internal derivation steps. Run those exact artifacts
+for fresh measurements outside cached Nix checks; a devShell-only compilation is
+not a second supported build backend. See `cross-platform-project-build-arch`.
+
 ## Zig and C
 
 Create a dedicated optimized benchmark executable from the project's build graph.

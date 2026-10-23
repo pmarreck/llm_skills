@@ -18,6 +18,9 @@ Read project intent, the compiler pin and existing build/test scripts. Obtain
 the compiler through the project environment; run `bend version`, `bend --help`,
 `bend guide` and the relevant `bend base NAME`. Check command exit statuses.
 Do not run a network installer or `bend update` to make an example work.
+Build project artifacts through `nix build`, invoking Bend/backend compilation
+inside derivations. Follow `cross-platform-project-build-arch`; the pinned
+devShell supports inspection/debugging, not an optional direct-build backend.
 Do not patch the compiler, weaken laws, add unsafe recursion or reduce a
 required test matrix to get a port through.
 

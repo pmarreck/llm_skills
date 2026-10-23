@@ -12,8 +12,11 @@ pre-0.1; old Rust-compiler tutorials often describe incompatible syntax.
 
 Read the project's intent, toolchain pin, app/package header and platform
 sources. Run the project-provided `roc version` and consult its `--help`.
-Use its Nix development environment when present; do not silently upgrade the
-compiler or platform to make an example compile.
+Use its pinned Nix development environment for tool inspection; do not silently
+upgrade the compiler or platform to make an example compile. Project builds
+require `nix build`, with Roc invoked inside the derivation. Follow
+`cross-platform-project-build-arch`; a devShell-only compile or optional direct
+backend does not satisfy the build contract.
 
 This reference was researched on **2026-10-04**, against official upstream
 revision `1a4df199210309bbb6befb1322f7435361bd01e1`. It describes that compiler

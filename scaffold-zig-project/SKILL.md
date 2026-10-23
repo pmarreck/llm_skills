@@ -12,6 +12,11 @@ hexagonal architecture pattern: pure Zig core (no I/O), C FFI boundary, C CLI
 consumer. Includes a Nix flake prepared for Mechatron Prime CI, build.zig,
 build.zig.zon, PLAN.md, and .gitignore.
 
+Require `nix build` from the start. `./build` is a thin flake-output selector and
+publisher; `zig build` runs inside derivations. Follow
+`cross-platform-project-build-arch` for output layout and test preparation.
+Do not scaffold an optional-Nix switch, direct backend or non-Nix fallback.
+
 <important>
 The user already has `setup_zig_repo` in their shell which handles: jj/git init, AGENTS.md/CLAUDE.md links, jj cheatsheet, Zig guide, commit hooks, and some .gitignore entries. This skill covers everything that alias does NOT: flake.nix, build.zig, build.zig.zon, directory structure, PLAN.md, and remaining .gitignore entries.
 </important>

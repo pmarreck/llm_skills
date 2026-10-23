@@ -89,7 +89,9 @@ secrets, whole environments or private endpoints in public artifacts.
 
 Quiet output must preserve queue-wait visibility and the final phase breakdown.
 An execution-budget pass does not excuse a prolonged end-to-end delay: identify
-the cause and queue a repair. Acquire an existing build budget once for related
-preparation rather than requeueing a warm build to test publication. Never evade
-resource caps to improve the timing. Publication tests use disposable products
+the cause and queue a repair. Prepare exact artifacts once through `nix build`
+under its builder resource controls; do not requeue compilation to test
+publication. Apply the existing host execution budget to fresh runtime tests and
+measurements without redundant admission. Never evade resource caps to improve
+the timing. Publication tests use disposable products
 under [test-isolation](../../test-isolation/SKILL.md), not the working entrypoint.

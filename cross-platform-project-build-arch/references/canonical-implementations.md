@@ -1,7 +1,8 @@
 # Canonical executable implementations
 
-Use one `./build` entrypoint. Keep the native build graph and Nix packages;
-adapt their selection/publication layer instead of replacing working compilers.
+Use one `./build` entrypoint backed by `nix build`. Keep language build graphs
+inside Nix derivations; adapt package selection/publication instead of maintaining
+a second direct build backend.
 This contract applies to projects with independently executable implementations,
 not every project containing more than one source language.
 
@@ -62,7 +63,7 @@ Retain existing explicit profile names. Product trees may also contain `lib`,
 
 Nix builds implementation packages into its store. Retained output links expose
 them under these project paths; do not write through those links or confuse
-them with direct-build output prefixes. Keep generated links/products ignored.
+them with writable scratch prefixes. Keep generated links/products ignored.
 Make the selector choose the package rather than making every package depend
 on it unnecessarily, so canonization does not force unrelated recompilation.
 
@@ -92,7 +93,7 @@ cwd or snapshotting live links afterward does not prevent a symlink escape.
 2. Add failing behavioral tests for selection/scope/publication using recording
    build adapters; implement the thin selection layer against the existing graph.
 3. During transition `./build --all` may exec legacy `./build-all` only if its
-   behavior covers both dimensions. Do not drop profile/target arguments. Never
+   behavior covers both dimensions and builds through Nix. Do not drop profile/target arguments. Never
    also make build-all delegate back to build --all: that creates recursion.
 4. Once consolidated, retire build-all recoverably or keep a one-way alias if
    required by actual users. Update CI, run/test helpers and documentation.
@@ -112,5 +113,7 @@ Required cases, reached through `./test`:
 - VARIANT present/absent produces the intended paths without ABI collisions;
   paths with spaces work; native target triples reach the actual build adapter.
 - Nix sees the tracked selector; product links retain required store outputs;
-  no direct build writes into a Nix store link. Pair fake-adapter tests with a
+  no mutation writes into a Nix store link. Pair fake-adapter tests with a
   focused real build/publication check; naming-only assertions are insufficient.
+- Missing Nix fails clearly without a compiler fallback; all build scopes select
+  declared Nix outputs. Test preparation reuses exact Nix-built prerequisites.

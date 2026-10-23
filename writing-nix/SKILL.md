@@ -11,6 +11,13 @@ without applying obsolete technical or community assumptions.
 
 ## Start with the source boundary
 
+Fleet policy (2026-10-23): builds require `nix build` through pinned flakes.
+Language builders run inside derivations; a devShell-only compilation is not
+the canonical build. Follow [cross-platform-project-build-arch](../cross-platform-project-build-arch/SKILL.md)
+for thin wrappers, target selection, publication and migration away from optional
+Nix/direct backends. Keep native runtime testing and credentialed release steps
+explicitly separate from artifact construction.
+
 Before `nix build`, `nix develop`, or `nix flake check` after adding, renaming,
 or generating a referenced file:
 
