@@ -82,6 +82,9 @@ an interactive shell or relying on a neighboring checkout.
 - Inspect workspace dependencies, target-specific dependencies, build/dev
   dependencies, patch tables and Cargo source-replacement configuration.
   A safe top-level manifest does not sanitize a nested workspace member.
+- Resolve Cargo configuration paths using Cargo's distinct rule: a
+  `.cargo/config.toml` source directory of `vendor` refers to `vendor` alongside
+  `.cargo`, not inside it. Do not reuse manifest-relative resolution unchanged.
 - Use actual Cargo TOML parsing for checks. A `[lib] path = "src/lib.rs"` entry
   is not a dependency declaration. Comments and documentation strings are not
   dependencies either. Cargo supports several equivalent table forms.
@@ -150,6 +153,7 @@ repositories and then a successful clean build for the repaired dependency.
 
 - [Cargo dependency specification](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
 - [Cargo workspaces](https://doc.rust-lang.org/cargo/reference/workspaces.html)
+- [Cargo configuration path resolution](https://doc.rust-lang.org/cargo/reference/config.html#config-relative-paths)
 - [Nixpkgs Rust packaging](https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/rust.section.md)
 - [Zig package manifest specification](https://github.com/ziglang/zig/blob/master/doc/build.zig.zon.md)
 - [Zig build system](https://ziglang.org/learn/build-system/)
