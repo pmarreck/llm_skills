@@ -42,6 +42,36 @@ a competing one; the table names the default only.
   commit that delivered it. `plan-retire` ranks recency by the last
   `YYYY-MM-DD [HH:MM]` on the line; an undated completion counts as oldest.
 
+## Execute open work continuously
+
+Open PLAN items are standing work to complete as soon as possible, including
+overnight, without sacrificing correctness, performance, testing or other project
+values. No separate overnight approval is required. A milestone is a checkpoint;
+it does not end work when actionable items remain.
+
+Clock, bedtime and wake-time notices are informational context about the owner's
+availability. They never imply an agent sleep/wake schedule. Human biological
+rest requirements do not suspend actionable agent work.
+
+Before voluntarily ending a turn, review the open items in priority order:
+
+1. If an item needs no owner decision, work on it. If a missing detail is easily
+   reversible, choose reasonably, record the assumption and proceed.
+2. If an item truly needs the owner's judgment, record the precise question and
+   affected dependency; continue independent items. A question on one item is
+   not a project-wide stop. Do not request approval already given.
+3. Stop when no actionable work remains, every remaining item is genuinely
+   blocked, the owner explicitly stops/pauses work, or an actual execution or
+   resource limit prevents progress. Report the specific blocker or limit and
+   checkpoint the next action. Do not describe the owner's absence, bedtime or
+   a completed milestone as a blocker.
+
+Explicit holds, budgets and action-specific approval requirements remain in
+force. Keep shelved ideas separate from actionable work. A checkbox does not
+authorize irreversible external actions or manufacturing new tasks to stay busy.
+Guidance cannot restart a terminated client; durable checkpoints support an
+existing authorized restart mechanism without pretending a scheduler exists.
+
 ## Scripts
 
 All three are LuaJIT, take the plan path as the final argument (default
