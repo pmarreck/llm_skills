@@ -28,6 +28,13 @@ not the shell cwd. Check symlink targets and Nix source filters as well as `..`.
 An ignored source directory created by shell setup is unavailable to a clean
 Git-backed flake unless the derivation explicitly supplies it.
 
+Preserve layout when packaging test scripts too. Interpolating
+`${./tests/cli/check}` exports that individual file; it does not export sibling
+helpers that the script locates relative to its own directory. Export a bounded
+source tree containing the script and its tracked helpers, then invoke the script
+inside that tree. Run the resulting Nix check, even when the checkout's `./test`
+passes. This is a source-closure problem that manifest path lint cannot establish.
+
 ## Pin and stage a separate source
 
 This schematic uses placeholders; replace them with an actual source revision:
