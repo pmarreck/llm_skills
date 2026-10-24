@@ -38,6 +38,11 @@ source filtering, path inputs, flake outputs, or missing-source failures.
 
 ## Route by the work being done
 
+- Read [references/dependency-portability.md](references/dependency-portability.md)
+  before adding or repairing Rust/Zig dependencies, private-repository sources,
+  workspace paths or Nix source staging. Server-local paths are not portable
+  dependency pins; distinguish valid in-repository paths from undeclared
+  sibling checkouts. Use staged-manifest checks plus a clean Nix build.
 - Read
   [references/derivations-and-packaging.md](references/derivations-and-packaging.md)
   for dependency roles, phases, hooks, overrides, cross compilation, and

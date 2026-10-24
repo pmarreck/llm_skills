@@ -5,12 +5,14 @@ Scope boundaries live in [docs/plan_context/follow-ups.md](docs/plan_context/fol
 
 ## Deferred pending separate scope
 
+- [ ] Review and document deployed dotfiles staged-dependency hook semantics after its behavioral tests and agentconf regression pass; static lint does not replace clean Nix build evidence.
 
 - [ ] Coordinate the dotfiles build-layout migration and select a CLI plus bundled GUI pilot when implementation scope is established (context: docs/plan_context/follow-ups.md).
 - [ ] Recover and reconcile the historical Nix-memory consolidation proposal before presenting any concrete removal decision (context: docs/plan_context/follow-ups.md).
 
 ## Recently completed
 
+- [x] Consolidate Rust/Zig dependency portability, private-source access and Nix staging in writing-nix; remove local-file-source and host-cache repair advice, add global pointer and coordinate hook implementation; full Nix check passed (done 2026-10-23 21:41 EDT).
 - [x] Add universal-app-frontend skill with verified GPUI package identities and application evidence, global AGENTS pointer and shared discovery; skill validation and full Nix check passed (done 2026-10-23 19:19 EDT).
 - [x] Require nix build in shared build, language, test-isolation and profiling guidance; reconcile global directives and notify current migration owners; local suite and Nix check passed (done 2026-10-23 18:41 EDT).
 - [x] Update Mechatron Prime CI guidance for a 30-minute job timeout, infrastructure-agent-approved exceptions and two-worker queue consumption (done 2026-10-23 18:30 EDT).

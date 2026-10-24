@@ -75,5 +75,5 @@ The fakeHash trick works the same way for individual fetch calls.
 <important>
 - **Forgetting to also update `checks` derivation** -- if the test derivation copies zigDeps separately, it uses the same hash. Both should reference the same `zigDeps` binding.
 - **Editing the wrong hash** -- projects may have multiple hashes (for different deps). Match the derivation name in the error to the right variable.
-- **Stale local Zig cache** -- if `nix build` succeeds locally but CI fails, clear `~/.cache/zig` and retry.
+- **Host cache hiding missing inputs** -- a clean Nix build must use its declared prefetched dependency tree, not `~/.cache/zig`. Compare source pins, staging, fetch/cache hashes and effective sandbox configuration; clearing the developer cache is not a portability repair. Follow `writing-nix/references/dependency-portability.md`.
 </important>

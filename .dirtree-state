@@ -74,6 +74,7 @@ annotate=[
 	writing-bend/references/sources.md = Pinned upstream documentation, reproducible example commands and bounded verification receipts
 	writing-nix/SKILL.md = Routes Nix authoring, packaging, diagnosis, activation, and ecosystem-lore work through scoped references.
 	writing-nix/agents/openai.yaml = Codex display metadata and default prompt for the writing-nix skill.
+	writing-nix/references/dependency-portability.md = Portable Rust and Zig pins, private source access, Nix staging and staged-manifest gate contract
 	writing-nix/references/derivations-and-packaging.md = Dependency roles, derivation phases, hooks, IFD, cross builds, and language dependency caching.
 	writing-nix/references/diagnostics-and-activation.md = Layered Nix diagnosis, fixed-output failures, closure safety, and NixOS activation gates.
 	writing-nix/references/ecosystem-and-community.md = Nix ecosystem lore, project tradeoffs, coexistence boundaries, governance history, and contribution policy.

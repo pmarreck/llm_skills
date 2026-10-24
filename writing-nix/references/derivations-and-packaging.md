@@ -69,6 +69,11 @@ as ordinary evaluation input.
 
 ## Language dependency trees
 
+Follow [dependency portability](dependency-portability.md) for Rust/Zig pins,
+private-source access and Nix-staged relative paths. All build/test helper
+dependencies belong to the source closure too; a developer-home script is not
+available merely because the main application dependency graph is correct.
+
 Keep language lock files authoritative and convert network dependency
 resolution into a declared fixed-output step. Do not fetch from the network in
 the normal build sandbox.

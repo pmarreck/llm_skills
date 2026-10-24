@@ -34,9 +34,13 @@ resolved source and locked inputs when visibility remains ambiguous.
 
 An explicit `path:/absolute/tree` input must materialize its outer tree before
 filters inside that flake can run. Large ignored build trees can therefore be
-copied even when an inner `cleanSource` or file set later excludes them. Prefer
-a Git source such as `git+file:///absolute/repository` when Git's tracked set is
-the intended boundary, after staging every required new file.
+copied even when an inner `cleanSource` or file set later excludes them. For
+temporary local diagnostics, a Git source can select the tracked set after
+staging required files. Never commit `path:/absolute/tree` or
+`git+file:///absolute/repository` as a portable external dependency: a different
+builder cannot fetch that machine-local location. Use a locked remote source
+or declared in-repository source instead; see
+[dependency portability](dependency-portability.md).
 
 Nix 2.35 made most flake source reads and copies lazy. `path:` and `hg+:` inputs
 remain exceptions. Do not generalize a 2.35 performance claim to those input
