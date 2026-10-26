@@ -41,6 +41,23 @@ a competing one; the table names the default only.
   local time with its zone label, e.g. `(done 2026-09-23 10:15 EDT)`, and the
   commit that delivered it. `plan-retire` ranks recency by the last
   `YYYY-MM-DD [HH:MM]` on the line; an undated completion counts as oldest.
+- **Completed questions must carry their answers.** When an item records a
+  question from the owner, retain the question (or its recognizable subject)
+  and append a concise `Answer: ...` on that same checked-off line. Include the
+  actual conclusion and any qualification that changes its meaning. “Answered,”
+  “discussed,” a chat reference or a link alone is insufficient. For a long
+  answer, keep the useful summary inline and link the detailed explanation or
+  evidence in `docs/plan_context/`. The owner must be able to review completed
+  questions without searching conversation history. If the question remains
+  unresolved or awaits a decision, leave it open and record what is missing;
+  do not invent certainty just to close it. Preserve the question, answer and
+  detail link together when retiring it to `docs/PLAN_LOG.md`.
+
+Example:
+
+```markdown
+- [x] Can the decoder consume stdin? Answer: Yes for sequential input; random-access decoding needs a seekable source (context: docs/plan_context/input-modes.md; done 2026-10-26 14:40 EDT; commit abc1234).
+```
 
 ## Execute open work continuously
 
@@ -112,7 +129,8 @@ replaced, keeping the target's permission bits.
 
 ## Routine
 
-1. Complete an item by checking it and stamping it.
+1. Complete an item by checking it and stamping it; for an owner question,
+   include the answer on the same line before marking it complete.
 2. Before committing a PLAN.md change, run `plan-retire` and then `plan-lint`.
    Commit PLAN.md and `docs/PLAN_LOG.md` together.
 3. If lint reports prose or a design note, move it to `docs/plan_context/`,

@@ -12,6 +12,8 @@ Scope boundaries live in [docs/plan_context/follow-ups.md](docs/plan_context/fol
 
 ## Recently completed
 
+- [x] How should completed owner questions preserve answers? Answer: Keep a recognizable question and substantive qualified answer on the checked-off line, link longer evidence, and preserve both when archiving; planning-work now requires this (done 2026-10-26 14:40 EDT; delivered in this commit).
+
 - [x] Consolidate Rust/Zig dependency portability, private-source access and Nix staging in writing-nix; remove local-file-source and host-cache repair advice, add global pointer and coordinate hook implementation; full Nix check passed (done 2026-10-23 21:41 EDT).
 - [x] Add universal-app-frontend skill with verified GPUI package identities and application evidence, global AGENTS pointer and shared discovery; skill validation and full Nix check passed (done 2026-10-23 19:19 EDT).
 - [x] Require nix build in shared build, language, test-isolation and profiling guidance; reconcile global directives and notify current migration owners; local suite and Nix check passed (done 2026-10-23 18:41 EDT).
