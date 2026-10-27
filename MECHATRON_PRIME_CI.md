@@ -22,7 +22,7 @@ migration. A committed manifest always wins; every new project needs one.
 
 ## Standing onboarding approval
 
-As of 2026-10-11, BDFN (Benevolent Dictator For Now) pre-approves Mechatron Prime
+As of 2026-10-11, SCS (Senior Cyber/Construct Swarmlord) pre-approves Mechatron Prime
 CI onboarding for all current and future `pmarreck/*` GitHub repositories,
 including private repositories and forks. Agents may create or repair the
 dedicated CI webhook for those repositories without asking for per-project
