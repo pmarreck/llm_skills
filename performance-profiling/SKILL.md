@@ -1,6 +1,6 @@
 ---
 name: performance-profiling
-description: Design, implement or investigate runtime benchmarks, complexity gates, allocation/memory growth and leak controls, test-suite feedback latency, or their measurement history. Use for bm/cg/mg integration, slow testing and performance regressions; not for unrelated correctness tests or ordinary build work.
+description: Measure and optimize hot paths, including SIMD/vectorization opportunities; design or investigate runtime benchmarks, complexity gates, allocation/memory growth and leak controls, test-suite feedback latency and measurement history. Use for speeding up code, bm/cg/mg integration, slow testing and performance regressions; not for unrelated correctness tests or ordinary build work.
 ---
 
 # Performance profiling
@@ -11,6 +11,7 @@ memory cleanup. An unexpectedly faster or smaller result deserves review too.
 
 Read the references relevant to the task:
 
+- [SIMD and vectorization](references/simd-and-vectorization.md) for measured hot-path optimization, compiler inspection, scalar equivalence and portable dispatch.
 - [Feedback latency](references/feedback-latency.md) for test-suite runtime budgets, separate build timing, CI waiting, fixture minimization and actionable agent feedback.
 - [Time and complexity](references/time-and-complexity.md) for workloads,
   startup, clocks, growth sweeps, noise and benchmark commands.
@@ -19,6 +20,17 @@ Read the references relevant to the task:
   storage, historical comparisons, retries, CI integration or baseline changes.
 - [Language adapters](references/language-adapters.md) when implementing a probe,
   especially for Zig, C FFI or LuaJIT.
+
+## Required optimization checkpoint
+
+When profiling or optimizing a CPU hot path, explicitly consider SIMD, compiler
+auto-vectorization and acceleration already offered by dependencies. Establish
+the bottleneck and a repeatable optimized baseline before changing code; inspect
+generated code or vectorization reports before assuming the compiler missed it.
+Record the outcome briefly: already vectorized, measured candidate retained or
+rejected, or deferred with a bottleneck/priority reason. This is a consideration
+requirement, not an instruction to add intrinsics to every loop. Follow the
+SIMD reference for correctness, platform dispatch and before/after evidence.
 
 ## Existing tool and command boundary
 
