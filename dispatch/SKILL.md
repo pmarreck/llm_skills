@@ -73,9 +73,16 @@ a polished summary that papers over failures.
 - NEVER sleep to "wait for a build to finish" — use run_in_background.
 
 ### Peer-agent coordination (for parallel dispatches)
+The parent owns branch/worktree allocation. Use only the assigned checkout and
+branch; request an allocation from the parent before creating another. Do not
+enable automatic worktree isolation when an assigned worktree already exists.
+Report the final commit, remaining uncommitted work and cleanup readiness before
+returning; the parent integrates results and retires the allocation safely.
+
 If you suspect another agent is concurrently editing the same files:
 - **Never revert another agent's uncommitted work to clean your build.**
-  Stash your own changes, open a worktree, or wait — do not destroy theirs.
+  Preserve your own changes and request a parent-owned worktree allocation or
+  coordinate a wait; do not destroy theirs or allocate an extra checkout yourself.
 - If a build is broken by a peer's WIP, say so explicitly in the progress
   doc instead of silently fixing it. The parent will reconcile.
 - If you're about to touch shared infrastructure (top-level build files,
@@ -175,12 +182,28 @@ the parent will reap orphaned watchers via
 
 ## Worktree isolation (for parallel fan-outs touching shared infra)
 
-When dispatching ≥ 2 agents that'll each modify the same top-level build files, dependency manifests, or lockfiles, prefer giving each its own isolated working copy. The Agent tool supports `isolation: "worktree"` — use it.
+When parallel agents would modify shared build files or manifests, the parent
+may allocate separate worktrees within the repository-wide budget. Inspect
+existing allocations first and reuse a suitable one. Automatic harness isolation
+also consumes a slot; never request it without accounting for the resulting
+worktree and any new branch. If no slot is free, integrate and safely retire
+completed work or serialize the tasks. Isolation does not require a new checkout
+for every short review or research subtask.
+
+Default limits are five registered working checkouts (including the primary)
+and five local branches (including the primary), shared by every agent using
+the same Git common directory. Warn at four, announce the maximum at five, and
+block an increase beyond five. Remote-tracking refs do not count. The owner can
+configure `agentLimits.maxBranches` and `agentLimits.maxWorktrees` independently;
+agents must not raise limits or bypass the gate to finish an assignment.
+PATH-based Git enforcement is an accident control, not an OS permission boundary;
+custom harnesses or libraries must honor the same allocation contract.
 
 Use Git worktrees for both tool-driven and manual isolation; do not create Jujutsu workspaces. Inspect `git worktree list --porcelain` and preserve uncommitted files and unpublished commits before authorized cleanup with `git worktree remove`. A detached review or build worktree can be intentional: do not attach it to a branch already used by another checkout or remove it merely because HEAD is detached.
 
 <remember>
-Worktree rules baked into the preamble already handle the case where you did NOT use worktrees; but worktrees eliminate the coordination hazard entirely.
+Worktrees separate working files, but still share refs and repository state.
+The parent must coordinate integration, limits and cleanup across all of them.
 </remember>
 
 ### Codescan + worktrees
