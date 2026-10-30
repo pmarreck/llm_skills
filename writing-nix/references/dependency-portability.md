@@ -22,6 +22,15 @@ or `git+file://` sources, or a sibling checkout outside the repository. A hash
 on a local path does not make that path obtainable elsewhere. `${pinnedInput}`
 in a Nix derivation is a dependency reference; a copied literal store path is not.
 
+Do not fix a missing dependency by copying files out of the host's Nix store.
+Declare the pinned source/package in the flake and stage it in the derivation.
+Host-side copying hides provenance and can make a local build pass while clean
+CI fails. Copying declared inputs inside a derivation is normal and appropriate.
+Exporting an intentional build output is also legitimate, but is not evidence
+that its runtime closure is portable. Where the shared copy guard is installed,
+use a command-scoped `ALLOW_NIX_STORE_COPY` reason for such an export; never use
+that exception to substitute for dependency declarations.
+
 Relative paths are not inherently bad: `crates/ui` referring to `../core` may
 stay within the same tracked workspace. Resolve against the declaring manifest,
 not the shell cwd. Check symlink targets and Nix source filters as well as `..`.
