@@ -49,6 +49,8 @@ for required in \
 	references/derivations-and-packaging.md \
 	references/ecosystem-and-community.md \
 	references/diagnostics-and-activation.md \
+	references/dependency-portability.md \
+	references/consuming-build-outputs.md \
 	scripts/check-flake-inputs; do
 	if [ ! -f "$skill_root/$required" ]; then
 		fail "writing-nix includes $required"
@@ -148,6 +150,36 @@ for marker in \
 		fail "ecosystem comparison includes $marker"
 	fi
 done
+
+# Build products are consumed in place through retained out-links. The copy
+# guard override is confined to release delivery; no reference may present it
+# as a routine way to export an output.
+outputs_reference="$skill_root/references/consuming-build-outputs.md"
+portability_reference="$skill_root/references/dependency-portability.md"
+if ! rg -F -q -- 'consuming-build-outputs.md' "$skill_root/SKILL.md"; then
+	fail 'SKILL.md routes to the build-output consumption reference'
+fi
+for marker in \
+	'--out-link' \
+	'--print-out-paths' \
+	'bin/<PF>/' \
+	'CANONICAL_IMPL' \
+	'## Development' \
+	'## Test' \
+	'## Release' \
+	'Zig' 'Rust' 'Roc' 'Lean' \
+	'ALLOW_NIX_STORE_COPY'; do
+	if [ -f "$outputs_reference" ] && rg -F -q -- "$marker" "$outputs_reference"; then
+		continue
+	fi
+	fail "build-output reference covers $marker"
+done
+if rg -F -q -- 'ALLOW_NIX_STORE_COPY' "$portability_reference"; then
+	fail 'dependency portability no longer offers the copy override for exports'
+fi
+if ! rg -F -q -- 'consuming-build-outputs.md' "$portability_reference"; then
+	fail 'dependency portability points to the build-output reference'
+fi
 
 if ! rg -F -q -- 'writing-nix' "$root/README.md"; then
 	fail 'README lists writing-nix for human discovery'

@@ -26,10 +26,9 @@ Do not fix a missing dependency by copying files out of the host's Nix store.
 Declare the pinned source/package in the flake and stage it in the derivation.
 Host-side copying hides provenance and can make a local build pass while clean
 CI fails. Copying declared inputs inside a derivation is normal and appropriate.
-Exporting an intentional build output is also legitimate, but is not evidence
-that its runtime closure is portable. Where the shared copy guard is installed,
-use a command-scoped `ALLOW_NIX_STORE_COPY` reason for such an export; never use
-that exception to substitute for dependency declarations.
+A project's own build outputs are not copied out either: they are consumed in
+place through retained out-links, and the copy guard's override is confined to
+release delivery. See [consuming build outputs](consuming-build-outputs.md).
 
 Relative paths are not inherently bad: `crates/ui` referring to `../core` may
 stay within the same tracked workspace. Resolve against the declaring manifest,
