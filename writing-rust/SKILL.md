@@ -105,6 +105,11 @@ The musl items below were verified with rustc 1.97.0:
   references the newest glibc symbol versions. A standalone artifact needs
   the standard interpreter path, no store RUNPATH, and a declared glibc floor
   that the writing-nix gate checks.
+- The standard library supports glibc 2.17 and later, and it probes newer
+  functions through weak references. Those references still record a hard
+  version requirement. A rustc 1.97 build against glibc 2.42 required
+  `GLIBC_2.39` because of `pidfd_spawnp`. A lower floor therefore needs
+  linking against an older glibc, not just avoiding new APIs.
 - **Archives:** every C or Zig archive the program links must be built for
   the same libc.
 - **Rust staticlibs:** each one carries its own standard library, so a Rust

@@ -190,11 +190,35 @@ project's intent or design document.
     statically, or bundle it beside the binary and find it through a
     `$ORIGIN` RUNPATH.
   - Declare a glibc floor. A binary needs a host glibc at least as new as
-    the newest `GLIBC_x.y` symbol version it references (`objdump -T`).
-    Linking against nixpkgs' current glibc raises that floor to the newest
-    release, so name the oldest supported distribution and link against its
-    glibc version. Zig can target one directly, for example
-    `x86_64-linux-gnu.2.28`.
+    the newest `GLIBC_x.y` version it requires (`readelf -VW`, `objdump -T`).
+    Otherwise the loader refuses to start it, with ``version `GLIBC_2.39' not
+    found``. Linking against nixpkgs' glibc sets that floor near the build's
+    own glibc, even with no new API in use. Measured on BeamFlix (2.42 build,
+    2026-11-19), its required versions came from four sources:
+    - 2.34 for `__libc_start_main`, `pthread_*` and `dlopen`, from the
+      libpthread and libdl merge into libc;
+    - 2.35 and 2.38 for new symbol versions of old math functions (`hypot`,
+      `fmodf`);
+    - 2.39 for `pidfd_spawnp`, which Rust's standard library references
+      weakly;
+    - and that weak reference's version requirement is not marked weak, so it
+      still blocks startup on older glibc.
+
+    For reference: Ubuntu 22.04 ships 2.35, Ubuntu 24.04 2.39, Debian 12
+    2.36, Debian 13 2.41, RHEL 9 2.34, RHEL 10 2.39.
+
+    To lower the floor, link against an older glibc. Zig targets one
+    directly, for example `x86_64-linux-gnu.2.28`.
+  - A lower floor costs no runtime improvement. glibc is loaded from the
+    host, so a program built for an old floor still gets the host's faster
+    string, memory and math routines, malloc changes, restartable sequences
+    and security fixes. The floor only limits which new functions the
+    program may call.
+  - Owner stance (2026-11-19): the fleet's main user currently runs
+    bleeding-edge distributions, so a glibc project may keep the floor its
+    Nix build produces for now. It must still state that floor in its
+    documentation, and choose an oldest supported distribution before
+    distributing to other users.
   - On NixOS, a standalone glibc artifact needs `nix-ld` or an FHS
     environment; NixOS users run the Nix package instead.
 - **Never static glibc.** A statically linked glibc still loads its build's
