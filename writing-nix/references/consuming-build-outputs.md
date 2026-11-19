@@ -114,9 +114,11 @@ Nothing under `bin/<PF>/` is a copied binary.
   bundle as a `dist` package. Hash and verify that output. A host-side `cp`
   into `dist/` is not a release build.
 - Other Nix machines receive closures with `nix copy --to`.
-- A store binary can depend on store paths (loader, rpath, resources). Before
-  shipping to machines without Nix, prove the artifact is self-contained by
-  inspecting its headers and `nix path-info -r`, not by its directory name.
+- Nix is the required build context, not an allowed runtime precondition for a
+  user-facing executable or application. A store-hosted development output may
+  use store paths while it is being assembled, but the shipped product must
+  start and perform its self-contained operations without a Nix installation,
+  store, profile, shell, or environment variables supplied by a devShell.
 - Hosts without a Nix store, native Windows among them, receive the `dist`
   artifact and unpack it. Their `bin/<PF>/` entries come from that delivery,
   not from a link into a store that does not exist there.
@@ -124,6 +126,36 @@ Nothing under `bin/<PF>/` is a copied binary.
   derivation or the store, and they modify the product. They run host-side on
   a writable copy of the derivation-built bundle, in disposable scratch, as a
   separately authorized release step.
+
+### Runtime-independence gate
+
+Make this a blocking package or release check, not a manual observation:
+
+1. Run the exact shipped executable from disposable scratch with Nix-specific
+   environment variables removed and a deliberately unusable `PATH` for every
+   operation that is meant to be self-contained. Do not substitute a source
+   wrapper, dev build, injected sidecar path, or command resolved from the
+   developer's normal `PATH`.
+2. Inspect the platform loader metadata. On Linux, reject an interpreter or
+   shared-library dependency when the product promises a static executable;
+   otherwise allow only the product's declared system runtime. On macOS and
+   Windows, system frameworks and operating-system libraries are not Nix
+   dependencies, but Nix-store loader paths, rpaths, DLL locations, resources,
+   and helper executables are failures.
+3. Inspect both the artifact bytes and its closure. Reject embedded
+   `/nix/store/` paths in a standalone distribution, and use
+   `nix-store -q --references` or `nix path-info -r` to prove that the closure
+   matches the declared runtime contract. A successful `nix build` proves only
+   construction, not portability.
+4. Exercise the installed or unpacked distribution shape. If the program
+   intentionally launches an external command, test startup and independent
+   features with that command absent, then test the integration through an
+   explicit fixture. Do not confuse an intentional user-selected subprocess
+   with a hidden dependency needed for the product itself to start.
+
+Language-specific skills own compiler and linker mechanics; this skill owns
+the invariant and gate. They should route here rather than restating weaker or
+language-specific versions of the runtime contract.
 
 ## The copy guard override
 
@@ -175,6 +207,6 @@ out-link, and `bin/<PF>/` pointing only at the canonical one.
 - [nix copy](https://nix.dev/manual/nix/2.34/command-ref/new-cli/nix3-copy)
 - [nix flake check](https://nix.dev/manual/nix/2.34/command-ref/new-cli/nix3-flake-check)
 
-Reviewed 2026-11-10. The command pages were confirmed reachable and to document
+Reviewed 2026-11-19. The command pages were confirmed reachable and to document
 the named flags; the language notes were not re-checked against upstream
 documentation and must be verified against each project's pinned tools.
