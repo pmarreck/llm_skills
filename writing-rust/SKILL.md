@@ -12,6 +12,9 @@ point for verification. `cargo check` and focused tests are useful diagnostics
 inside the declared Nix environment; they do not replace the project build
 contract.
 
+When stamping build identity, follow the shared
+[build revision rule](../writing-nix/references/build-revisions.md).
+
 ## Encode completeness in types
 
 Prefer closed enums and exhaustive `match` expressions for finite domain

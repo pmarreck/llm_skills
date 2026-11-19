@@ -10,6 +10,9 @@ pre-1.0 and releases can change language, standard-library, package, and build
 APIs substantially. Never infer an API from memory or from an unversioned
 example.
 
+When stamping build identity, follow the shared
+[build revision rule](../writing-nix/references/build-revisions.md).
+
 ## Establish the project's actual toolchain first
 
 1. Read the project `AGENTS.md`, `INTENT.md`, `PLAN.md`, `flake.nix`, lockfile,

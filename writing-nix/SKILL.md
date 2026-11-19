@@ -38,6 +38,9 @@ source filtering, path inputs, flake outputs, or missing-source failures.
 
 ## Route by the work being done
 
+- Read [references/build-revisions.md](references/build-revisions.md) when
+  stamping `rN-abcdef` build revisions in packages, release receipts, CLI
+  output or About boxes.
 - Read [references/dependency-portability.md](references/dependency-portability.md)
   before adding or repairing Rust/Zig dependencies, private-repository sources,
   workspace paths or Nix source staging. Server-local paths are not portable
