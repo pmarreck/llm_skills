@@ -82,24 +82,31 @@ the project test path. Keep tests isolated and fast. A compile success is not
 behavioral verification. Use property, differential, and exhaustive finite
 domain checks where the contract supports them.
 
-## Static Linux executables and dead code
+## Linux libc and dead code
 
-Shipped Linux executables are fully static against musl, and every Linux
-build uses musl. The policy and its blocking gate live in
+Each project uses one libc for all of its Linux builds. Static musl is the
+default; dynamic glibc is for programs that must load host GPU, display or
+audio libraries (GUI and GPU applications). Neither may depend on a Nix
+store path. The policy and its blocking gate live in
 [writing-nix's runtime-independence gate](../writing-nix/references/consuming-build-outputs.md).
-The Rust mechanics below were verified with rustc 1.97.0:
+The musl items below were verified with rustc 1.97.0:
 
-- Build with `pkgs.pkgsStatic.rustPlatform.buildRustPackage`, which uses a
-  cached cross rustc for the musl target and links statically.
-- Do not use `-C target-feature=+crt-static` on the gnu target. The standard
-  library reaches `getaddrinfo` (`std::net`) and `getpwuid_r`
-  (`std::env::home_dir`), which a static glibc still resolves through shared
-  libraries at run time. Under Nix's linker wrapper the link failed outright
-  ("DSO missing from command line").
-- Every C or Zig archive the program links must be a musl build. Each Rust
-  `staticlib` carries its own standard library, so a Rust program cannot link
-  another Rust staticlib; that pairing needs a shared library, which only
-  test-only artifacts may use.
+- **Static musl:** build with `pkgs.pkgsStatic.rustPlatform.buildRustPackage`,
+  which uses a cached cross rustc for the musl target and links statically.
+- **Never static glibc:** do not use `-C target-feature=+crt-static` on the gnu
+  target. The standard library reaches `getaddrinfo` (`std::net`) and
+  `getpwuid_r` (`std::env::home_dir`), which a static glibc still resolves
+  through shared libraries at run time. Under Nix's linker wrapper the link
+  failed outright ("DSO missing from command line").
+- **glibc:** a Nix-built gnu binary names the store's loader and glibc, and
+  references the newest glibc symbol versions. A standalone artifact needs
+  the standard interpreter path, no store RUNPATH, and a declared glibc floor
+  that the writing-nix gate checks.
+- **Archives:** every C or Zig archive the program links must be built for
+  the same libc.
+- **Rust staticlibs:** each one carries its own standard library, so a Rust
+  program cannot link another Rust staticlib. That pairing needs a shared
+  library, which only test-only artifacts may use.
 - Dead-code elimination: rustc emits a section per function and passes
   `--gc-sections` for executables. In the release profile, set `lto = true`
   (fat) and `codegen-units = 1` so cross-crate dead code is removed too.

@@ -74,8 +74,8 @@ current Nix policy before using them.
   and covered by a performance check.
 - Run cross-target build and packaged-artifact smoke checks for every supported
   platform. A successful compile does not prove the loader, libc, ABI, or
-  runtime dependencies are usable. Shipped Linux executables are static musl;
-  see "Static Linux executables and dead code" below.
+  runtime dependencies are usable. For the Linux libc choice, see "Linux libc
+  and dead code" below.
 
 ## Dependencies and Nix
 
@@ -103,20 +103,30 @@ staging; a devShell-only build is insufficient.
 Use `fix-zig-deps-hash` only for a genuine dependency-content change. A moved
 URL or tag does not by itself prove the package contents changed.
 
-## Static Linux executables and dead code
+## Linux libc and dead code
 
-Shipped Linux executables are fully static against musl, and every Linux
-build uses musl. The policy, the reasons (never static glibc) and the
-blocking gate live in
-[writing-nix's runtime-independence gate](../writing-nix/references/consuming-build-outputs.md);
-these are the Zig mechanics, verified on Zig 0.16.0.
+Each project uses one libc for all of its Linux builds. Static musl is the
+default; dynamic glibc is for programs that must load host GPU, display or
+audio libraries. Neither may depend on a Nix store path. The policy, the
+reasons (never static glibc) and the blocking gate live in
+[writing-nix's runtime-independence gate](../writing-nix/references/consuming-build-outputs.md).
+These are the Zig mechanics, verified on Zig 0.16.0.
 
-- Build for `-Dtarget=<cpu>-linux-musl`. Zig bundles musl and links an
-  executable statically, so it has no interpreter to repoint. The native gnu
-  target on NixOS instead yields a dynamic glibc binary whose baked-in FHS
-  loader path does not exist there, which is why projects reach for
-  `patchelf`. Static musl removes that step.
-- Archives that a musl executable links (C or Rust) must be musl builds too.
+- **Static musl:** build for `-Dtarget=<cpu>-linux-musl`. Zig bundles musl
+  and links the executable statically, so there is no interpreter to
+  repoint. The native gnu target on NixOS instead yields a dynamic glibc
+  binary whose baked-in FHS loader path does not exist there, which is why
+  projects reach for `patchelf`.
+- **glibc:** name the target and its glibc floor explicitly, for example
+  `-Dtarget=x86_64-linux-gnu.2.28`. Zig then uses its own glibc stubs for
+  that version rather than the build host's glibc. An explicit gnu target
+  gets the standard `/lib64/ld-linux-x86-64.so.2` interpreter and no
+  RUNPATH. With `.2.28`, a glibc 2.38 function (`strlcpy`) was undeclared at
+  compile time; with `.2.39` it linked, and the newest symbol version was
+  `GLIBC_2.38`. An unversioned gnu target also refused it, so state the
+  floor rather than rely on the default. Confirm the result with the
+  writing-nix gate.
+- Archives a program links (C or Rust) must be built for the same libc.
 - Zig code is compiled lazily, so a function nothing references gets no code.
   A static library is different: every `export fn` is a root, so the whole
   exported surface is emitted. Set `lib.link_function_sections = true` and

@@ -157,52 +157,93 @@ Language-specific skills own compiler and linker mechanics; this skill owns
 the invariant and gate. They should route here rather than restating weaker or
 language-specific versions of the runtime contract.
 
-### Linux: static musl, one libc throughout (owner policy, 2026-11-19)
+### Linux: one libc per project, no Nix paths (owner policy, 2026-11-19)
 
-Shipped Linux executables are fully static against musl: no program
-interpreter and no `NEEDED` entry. Binary size is the accepted cost; reduce it
-with link-time dead-code elimination (see the language skills), never by
-reintroducing a shared library. Dynamic glibc binaries built by Nix name a
-`/nix/store` loader and libc, so they fail to start on other distributions,
-on musl systems and on an offline machine without that exact store path.
+Anything shipped to run outside Nix must start on other Linux distributions.
+Its interpreter, `NEEDED` entries, RUNPATH and bytes name no `/nix/store`
+path. The Nix package itself may use store paths; the standalone artifact
+may not.
 
-Use one libc across the board. Every Linux build a project ships or tests
-targets musl: executables, test binaries, and static archives handed to
-consumers. Mixing them lets a suite pass on glibc while the product runs on
-musl, and glibc/musl behavior differences are hard to diagnose.
+Each project chooses one libc for all of its Linux builds, musl or glibc,
+according to its requirements. That one libc covers shipped executables,
+test binaries and archives alike, so the suite exercises the libc that
+ships. Never mix them within a project: behavior differences between glibc
+and musl are hard to diagnose. Record the choice and its reason in the
+project's intent or design document.
 
+- **musl, fully static (the default):** for programs that need nothing from
+  the host beyond the kernel, such as CLIs, services and build tools. The
+  executable has no interpreter and no `NEEDED` entry. Size is the accepted
+  cost; reduce it with link-time dead-code elimination and debug stripping
+  (see the language skills).
+- **glibc, dynamic:** required when the program must load libraries the host
+  installs. These include GPU drivers and their loaders (Mesa, NVIDIA,
+  Vulkan drivers, CUDA, NVENC, VA-API), display and input (Wayland, X11,
+  xkbcommon) and audio servers. They are glibc shared objects: a static
+  program cannot load them, and musl cannot load glibc libraries. GUI and
+  GPU applications therefore use glibc.
+  - Use the distribution-standard interpreter path
+    (`/lib64/ld-linux-x86-64.so.2` on x86_64, `/lib/ld-linux-aarch64.so.1`
+    on arm64), never a store path.
+  - Limit `NEEDED` to a declared host runtime: glibc's own libraries plus
+    the system graphics, display and audio libraries. Link anything else
+    statically, or bundle it beside the binary and find it through a
+    `$ORIGIN` RUNPATH.
+  - Declare a glibc floor. A binary needs a host glibc at least as new as
+    the newest `GLIBC_x.y` symbol version it references (`objdump -T`).
+    Linking against nixpkgs' current glibc raises that floor to the newest
+    release, so name the oldest supported distribution and link against its
+    glibc version. Zig can target one directly, for example
+    `x86_64-linux-gnu.2.28`.
+  - On NixOS, a standalone glibc artifact needs `nix-ld` or an FHS
+    environment; NixOS users run the Nix package instead.
 - **Never static glibc.** A statically linked glibc still loads its build's
   shared libraries at run time for name service lookups (users, hosts),
   `iconv` and `dlopen`. Rust's standard library reaches `getaddrinfo` and
   `getpwuid_r`; with rustc 1.97.0 and glibc 2.42, a `+crt-static` gnu link
   under Nix's wrapper printed those warnings and then failed ("DSO missing
   from command line").
-- **C:** `pkgs.pkgsStatic.stdenv` (a musl cross toolchain from the build
-  platform, cached on cache.nixos.org).
-- **Rust:** `pkgs.pkgsStatic.rustPlatform.buildRustPackage`. Its compiler is a
-  cached cross rustc. Do not use `pkgsMusl` for Rust: its rustc is a native
-  musl compiler that was not cached and builds from source.
-- **Zig:** build for `<cpu>-linux-musl`; Zig bundles musl and links it
-  statically.
-- **Archives:** every archive linked into a musl executable must itself be a
-  musl build. Expose musl archives as their own package or output; do not
-  link gnu-target archives into a musl program.
-- **Unavoidable dynamic linking** (a test that must load a shared library):
-  keep it on musl through `pkgs.pkgsCross.musl64`, and confine it to test-only
-  artifacts.
-- **macOS** cannot be fully static (libSystem is always dynamic); the general
-  gate above applies there.
+- **musl routes in Nix:**
+  - C: `pkgs.pkgsStatic.stdenv`, a musl cross toolchain from the build
+    platform, cached on cache.nixos.org.
+  - Rust: `pkgs.pkgsStatic.rustPlatform.buildRustPackage`, whose compiler is a
+    cached cross rustc. Do not use `pkgsMusl` for Rust: its rustc is a native
+    musl compiler that was not cached and builds from source.
+  - Zig: build for `<cpu>-linux-musl`; Zig bundles musl and links it
+    statically.
+  - When a musl project must link a shared library (for example a test that
+    loads one), `pkgs.pkgsCross.musl64` keeps it on musl. Confine that to
+    test-only artifacts.
+- **Archives** linked into a program must be built for that program's libc.
+  A library consumed by projects with different choices should ship one
+  flavor per libc, and the library's own suite must test each flavor it
+  ships.
+- **macOS** cannot be fully static, because libSystem is always dynamic. The
+  general gate above applies there.
 
-Gate each shipped Linux executable mechanically, as a required `./test` check:
+Gate each shipped Linux artifact mechanically, as a required `./test` check:
 
-1. `readelf -lW` shows no `Requesting program interpreter`, and `readelf -dW`
-   shows no `NEEDED` entry.
-2. The binary does real work alone in an empty root, for example
-   `bwrap --unshare-all --ro-bind BIN /bin/prog --dev /dev --proc /proc /bin/prog ...`
-   with only its input files bound. A dynamic binary fails with `execvp ...:
-   No such file or directory`.
-3. A control: the same check must flag a known dynamic binary, proving it reads
-   real program headers rather than passing on empty output.
+1. Program headers (`readelf -lW`, `readelf -dW`):
+   - static musl: no `Requesting program interpreter` line and no `NEEDED`
+     entry;
+   - glibc: the standard interpreter path, `NEEDED` within the declared
+     list, no RPATH or RUNPATH outside `$ORIGIN`, and no `GLIBC_` version
+     newer than the declared floor.
+2. No `/nix/store/` string in the artifact's bytes. Check with
+   `strings -a | grep -c`.
+3. Run it where Nix is absent:
+   - Static musl: run it alone in an empty root, for example
+     `bwrap --unshare-all --ro-bind BIN /bin/prog --dev /dev --proc /proc /bin/prog ...`,
+     with only its input files bound. A dynamic binary fails there with
+     `execvp ...: No such file or directory`.
+   - glibc: run it inside a root filesystem of the oldest supported
+     distribution, such as a container image or an extracted rootfs under
+     bwrap.
+   - GPU and display features: exercise them on a machine that has the
+     drivers.
+4. Add a control: the same check must flag a known-bad binary, such as a
+   dynamic Nix-built one. This proves it reads real program headers rather
+   than passing on empty output.
 
 ## The copy guard override
 
