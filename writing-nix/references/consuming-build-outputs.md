@@ -157,6 +157,53 @@ Language-specific skills own compiler and linker mechanics; this skill owns
 the invariant and gate. They should route here rather than restating weaker or
 language-specific versions of the runtime contract.
 
+### Linux: static musl, one libc throughout (owner policy, 2026-11-19)
+
+Shipped Linux executables are fully static against musl: no program
+interpreter and no `NEEDED` entry. Binary size is the accepted cost; reduce it
+with link-time dead-code elimination (see the language skills), never by
+reintroducing a shared library. Dynamic glibc binaries built by Nix name a
+`/nix/store` loader and libc, so they fail to start on other distributions,
+on musl systems and on an offline machine without that exact store path.
+
+Use one libc across the board. Every Linux build a project ships or tests
+targets musl: executables, test binaries, and static archives handed to
+consumers. Mixing them lets a suite pass on glibc while the product runs on
+musl, and glibc/musl behavior differences are hard to diagnose.
+
+- **Never static glibc.** A statically linked glibc still loads its build's
+  shared libraries at run time for name service lookups (users, hosts),
+  `iconv` and `dlopen`. Rust's standard library reaches `getaddrinfo` and
+  `getpwuid_r`; with rustc 1.97.0 and glibc 2.42, a `+crt-static` gnu link
+  under Nix's wrapper printed those warnings and then failed ("DSO missing
+  from command line").
+- **C:** `pkgs.pkgsStatic.stdenv` (a musl cross toolchain from the build
+  platform, cached on cache.nixos.org).
+- **Rust:** `pkgs.pkgsStatic.rustPlatform.buildRustPackage`. Its compiler is a
+  cached cross rustc. Do not use `pkgsMusl` for Rust: its rustc is a native
+  musl compiler that was not cached and builds from source.
+- **Zig:** build for `<cpu>-linux-musl`; Zig bundles musl and links it
+  statically.
+- **Archives:** every archive linked into a musl executable must itself be a
+  musl build. Expose musl archives as their own package or output; do not
+  link gnu-target archives into a musl program.
+- **Unavoidable dynamic linking** (a test that must load a shared library):
+  keep it on musl through `pkgs.pkgsCross.musl64`, and confine it to test-only
+  artifacts.
+- **macOS** cannot be fully static (libSystem is always dynamic); the general
+  gate above applies there.
+
+Gate each shipped Linux executable mechanically, as a required `./test` check:
+
+1. `readelf -lW` shows no `Requesting program interpreter`, and `readelf -dW`
+   shows no `NEEDED` entry.
+2. The binary does real work alone in an empty root, for example
+   `bwrap --unshare-all --ro-bind BIN /bin/prog --dev /dev --proc /proc /bin/prog ...`
+   with only its input files bound. A dynamic binary fails with `execvp ...:
+   No such file or directory`.
+3. A control: the same check must flag a known dynamic binary, proving it reads
+   real program headers rather than passing on empty output.
+
 ## The copy guard override
 
 Where the shared copy guard wraps `cp`, `install` and `rsync`,

@@ -48,7 +48,9 @@ source filtering, path inputs, flake outputs, or missing-source failures.
   before a build, test, run or release script reads a build product, before
   publishing a command to `bin/<PF>/`, and whenever a step would copy from or
   search `/nix/store`. Also read its runtime-independence gate before shipping
-  an executable or application to users. Outputs are consumed in place through
+  an executable or application to users. On Linux, shipped executables are
+  fully static against musl, and every Linux build uses musl (one libc
+  throughout, never static glibc). Outputs are consumed in place through
   retained out-links; the copy guard override is for release delivery only.
 - Read
   [references/derivations-and-packaging.md](references/derivations-and-packaging.md)
