@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Lean"
+  short_description: "Build and verify version-pinned Lean 4 software"
+  default_prompt: "Use $writing-lean to implement or review this Lean 4 work with explicit proof boundaries."

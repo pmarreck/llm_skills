@@ -1,0 +1,118 @@
+#!/usr/bin/env luajit
+-- Contract tests for the writing-lean skill: required files exist, the
+-- frontmatter is valid, every relative Markdown link resolves, every example
+-- file is documented and carries an axiom report, the flake and CI compile
+-- the examples, and nothing still uses the skill's retired name. The flake
+-- check itself compiles the examples and audits their axioms; this file keeps
+-- the cheap structural contract that runs without Lean.
+
+local script_dir = arg[0]:match("^(.*)/[^/]+$") or "."
+local root = script_dir .. "/../.."
+local skill = root .. "/writing-lean"
+
+local failures = 0
+local function check(ok, label, detail)
+	if ok then
+		print("ok - " .. label)
+	else
+		failures = failures + 1
+		print("not ok - " .. label .. (detail and (" | " .. detail) or ""))
+	end
+end
+
+local function read(path)
+	local f = io.open(path, "r")
+	if not f then return nil end
+	local text = f:read("*a")
+	f:close()
+	return text
+end
+
+local function shell_quote(s)
+	return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+local references = {
+	"references/traps-and-changes.md",
+	"references/tooling-and-nix.md",
+	"references/cross-language.md",
+}
+local required = { "SKILL.md", "agents/openai.yaml", "examples/checks.nix" }
+for _, rel in ipairs(references) do required[#required + 1] = rel end
+for _, rel in ipairs(required) do
+	check(read(skill .. "/" .. rel) ~= nil, "writing-lean includes " .. rel)
+end
+
+-- Frontmatter and UI metadata use the current name.
+local skill_md = read(skill .. "/SKILL.md") or ""
+local name = skill_md:match("^%-%-%-\nname: ([^\n]+)\n")
+local description = skill_md:match("\ndescription: ([^\n]+)\n")
+check(name == "writing-lean", "frontmatter name is writing-lean", tostring(name))
+check(description ~= nil and #description <= 1024,
+	"frontmatter description exists and fits 1024 characters",
+	description and tostring(#description) or "missing")
+local openai = read(skill .. "/agents/openai.yaml") or ""
+check(openai:find("$writing-lean", 1, true) ~= nil, "agents/openai.yaml invokes $writing-lean")
+
+-- Every relative link in the skill's Markdown resolves.
+local docs = { "SKILL.md" }
+for _, rel in ipairs(references) do docs[#docs + 1] = rel end
+for _, rel in ipairs(docs) do
+	local text = read(skill .. "/" .. rel) or ""
+	local base = skill .. "/" .. (rel:match("^(.*)/[^/]+$") or ".")
+	for target in text:gmatch("%]%(([^)%s]+)%)") do
+		if not target:match("^%a+://") and not target:match("^#") then
+			local path = target:gsub("#.*$", "")
+			local ok = read(base .. "/" .. path) ~= nil
+				or os.execute("test -d " .. shell_quote(base .. "/" .. path)) == 0
+			check(ok, rel .. " link resolves: " .. target)
+		end
+	end
+end
+
+-- Every example is linked from SKILL.md and reports its axioms, and none
+-- contains a proof escape. The Nix check compiles them and audits the
+-- reported axioms; this scan catches an undocumented or unaudited file early.
+local examples = {}
+local listing = io.popen("ls " .. shell_quote(skill .. "/examples"))
+for entry in listing:lines() do
+	if entry:match("%.lean$") then examples[#examples + 1] = entry end
+end
+listing:close()
+check(#examples >= 6, "writing-lean has at least six example files", tostring(#examples))
+for _, file in ipairs(examples) do
+	local text = read(skill .. "/examples/" .. file) or ""
+	check(skill_md:find("(examples/" .. file .. ")", 1, true) ~= nil,
+		"SKILL.md links examples/" .. file)
+	check(text:find("\n#print axioms ", 1, true) ~= nil, file .. " reports its axioms")
+	for _, escape in ipairs({ "sorry", "admit", "native_decide", "\naxiom " }) do
+		check(text:find(escape, 1, true) == nil, file .. " has no " .. escape:gsub("\n", ""))
+	end
+end
+
+-- CI compiles the examples, so a Lean update that breaks one turns CI red.
+local flake = read(root .. "/flake.nix") or ""
+check(flake:find("./writing-lean/examples/checks.nix", 1, true) ~= nil,
+	"flake.nix checks compile writing-lean/examples")
+local targets = read(root .. "/.mechatron-prime/targets") or ""
+check(targets:find("\nchecks.x86_64-linux.writing-lean-examples\n", 1, true) ~= nil
+	or targets:find("\nchecks.x86_64-linux.writing-lean-examples$") ~= nil,
+	"Mechatron CI builds checks.x86_64-linux.writing-lean-examples")
+
+-- The skill was renamed; nothing may route agents to its retired name. The
+-- name is assembled from two parts so this file does not match itself.
+local retired = "lean4" .. "-development"
+local grep = io.popen("grep -rl --exclude-dir=.git --exclude-dir=.lake -e "
+	.. shell_quote(retired) .. " " .. shell_quote(root) .. " 2>/dev/null")
+local stale = {}
+for path in grep:lines() do stale[#stale + 1] = path end
+grep:close()
+check(#stale == 0, "no file refers to the retired skill name", table.concat(stale, ", "))
+
+if failures == 0 then
+	print("PASS: writing-lean skill contract")
+	os.exit(0)
+else
+	print(string.format("FAIL: writing-lean skill contract (%d failing)", failures))
+	os.exit(1)
+end

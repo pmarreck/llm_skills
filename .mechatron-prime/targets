@@ -11,3 +11,7 @@ checks.x86_64-linux.test
 # breaks the skill's recipe fails CI.
 checks.x86_64-linux.writing-elm-example
 checks.x86_64-linux.writing-elm-example-checks
+
+# The writing-lean examples: each compiles with nixpkgs' Lean without
+# warnings and uses only Lean's standard axioms.
+checks.x86_64-linux.writing-lean-examples

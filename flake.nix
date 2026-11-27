@@ -113,6 +113,11 @@
 					# example's build, tests or elm-review turns CI red.
 					writing-elm-example = import ./writing-elm/examples/default.nix { inherit pkgs; };
 					writing-elm-example-checks = import ./writing-elm/examples/checks.nix { inherit pkgs; };
+
+					# The writing-lean examples, compiled with nixpkgs' Lean and audited for
+					# sorry and nonstandard axioms: a Lean update that breaks a worked
+					# example or its lemma names turns CI red.
+					writing-lean-examples = import ./writing-lean/examples/checks.nix { inherit pkgs; };
 				});
 
 			devShells = forAllSystems (system:
