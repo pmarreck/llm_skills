@@ -34,8 +34,12 @@ Read `erect-agent-stack --help` for the installed options. A live matching agent
 is always reused, even with `--fresh`. Otherwise it resumes the saved exact ID.
 For new Claude conversations, the selected default is Opus 5.5
 (`claude-opus-5-5`, selected 2026-09-24), unless the owner explicitly requests
-another model. Configure the user's Claude `model` setting so the helper
-inherits it; for a direct fresh launch, pass `--model claude-opus-5-5`.
+another model. The helper has no model option: it starts Claude with the
+user's Claude `model` setting, so it launches Opus 5.5 only when that setting
+selects it. Otherwise launch natively (see Launch) and pass the model to Claude
+after `--`, as `-- --dangerously-skip-permissions --model claude-opus-5-5`;
+then run `erect-agent-stack --json --agent claude "$project_dir"` once while
+the agent is live so the helper records its session ID for later resumes.
 Verify the installed client supports that model. Do not silently fall back,
 upgrade the pin on a schedule, or change a running/restored conversation's
 model merely to apply a new-conversation default.
@@ -148,7 +152,10 @@ herdr workspace create --cwd "$project_dir" --label "$project_name" --no-focus
 
 Parse the returned `.result.root_pane.pane_id` and workspace ID. Use those exact
 handles, never sidebar positions or another client's focus. Confirm the pane
-is at an interactive shell before starting an agent.
+is at an interactive shell before starting an agent. Give the workspace the
+standard layout the helper creates: `herdr tab rename "$tab_id" AI` for the
+root tab, and `herdr tab create --workspace "$workspace_id" --cwd "$project_dir"
+--label CLI --no-focus` for the shell tab.
 
 Use Peter's requested backend, otherwise the existing backend on restoration,
 otherwise Claude. Discover installed native options with `--help`. Use native
