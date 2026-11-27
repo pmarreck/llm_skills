@@ -44,7 +44,7 @@ to invent a second engine or claim a gate passed.
 
 | Entry point | Purpose |
 | --- | --- |
-| `./cg` | Bounded input-growth and historical ratio checks |
+| `./big_o` | Declared-complexity input-growth and historical checks; previously proposed as `./cg` |
 | `./mg` | Bounded memory growth, peak usage and cleanup checks |
 | `./bm` | Thorough fixed-workload, startup and scaling measurements |
 | `./test` | All correctness suites and required bounded gates |

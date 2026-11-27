@@ -63,6 +63,17 @@ Exercise each available path explicitly, including baseline dispatch. Never forc
 unsupported instructions to run. Cross-compilation alone is not runtime evidence;
 record platforms or ISA paths that remain unqualified.
 
+For Rust AVX2 work that must still run on older x86-64 CPUs, consider the
+[`multiversion` crate](https://docs.rs/multiversion/latest/multiversion/).
+Its `#[multiversion(targets("x86_64+avx2"))]` function attribute can compile
+an AVX2 variant alongside a generic fallback and dispatch to a supported
+variant at runtime. Treat it as one dispatch option, not a substitute for
+qualification: keep the baseline path, test both paths, measure dispatch and
+code-size costs, and pin the crate through the project's Nix/Cargo dependency
+setup. Avoid globally enabling a CPU target that assumes AVX2 when the binary
+must support older machines; the crate documents that known compile-time target
+features can elide runtime dispatch.
+
 ## Accept on evidence
 
 Compare baseline and candidate with equivalent inputs, optimization settings,
