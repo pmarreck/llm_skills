@@ -89,6 +89,13 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_writing_elm_skill"; then
+	printf 'PASS: writing-elm skill contract\n'
+else
+	printf 'FAIL: writing-elm skill contract\n' >&2
+	failures=$((failures + 1))
+fi
+
 if "$ROOT/tests/cli/test_planning_work"; then
 	printf 'PASS: planning-work PLAN.md helpers\n'
 else

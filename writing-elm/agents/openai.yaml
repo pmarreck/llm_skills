@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing Elm"
+  short_description: "Current Elm toolchain, modeling and decoder-safe development"
+  default_prompt: "Use $writing-elm to write and test Elm code against this project's pinned compiler, Nix build and elm.json."

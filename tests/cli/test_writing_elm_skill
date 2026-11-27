@@ -1,0 +1,115 @@
+#!/usr/bin/env luajit
+-- Contract tests for the writing-elm skill: required files exist, the
+-- frontmatter is valid, every relative Markdown link resolves, and the
+-- example's Nix package sources match its elm.json exactly (the staleness
+-- check the skill tells projects to keep).
+
+local cjson = require("cjson")
+
+local script_dir = arg[0]:match("^(.*)/[^/]+$") or "."
+local skill = script_dir .. "/../../writing-elm"
+
+local failures = 0
+local function check(ok, label, detail)
+	if ok then
+		print("ok - " .. label)
+	else
+		failures = failures + 1
+		print("not ok - " .. label .. (detail and (" | " .. detail) or ""))
+	end
+end
+
+local function read(path)
+	local f = io.open(path, "r")
+	if not f then return nil end
+	local text = f:read("*a")
+	f:close()
+	return text
+end
+
+local required = {
+	"SKILL.md",
+	"agents/openai.yaml",
+	"references/toolchain-and-nix.md",
+	"references/json.md",
+	"references/architecture.md",
+	"references/mistakes.md",
+	"examples/elm.json",
+	"examples/elm-srcs.nix",
+	"examples/registry.dat",
+	"examples/default.nix",
+	"examples/nix/elm-release-binary.nix",
+	"examples/src/Main.elm",
+	"examples/src/Card.elm",
+	"examples/src/DecodeField.elm",
+	"examples/src/Ports.elm",
+	"examples/tests/Tests.elm",
+}
+for _, rel in ipairs(required) do
+	check(read(skill .. "/" .. rel) ~= nil, "writing-elm includes " .. rel)
+end
+
+-- Frontmatter
+local skill_md = read(skill .. "/SKILL.md") or ""
+local name = skill_md:match("^%-%-%-\nname: ([^\n]+)\n")
+local description = skill_md:match("\ndescription: ([^\n]+)\n")
+check(name == "writing-elm", "frontmatter name is writing-elm", tostring(name))
+check(description ~= nil and #description <= 1024,
+	"frontmatter description exists and fits 1024 characters",
+	description and tostring(#description) or "missing")
+
+-- Every relative link in the skill's Markdown resolves.
+local docs = { "SKILL.md", "references/toolchain-and-nix.md", "references/json.md",
+	"references/architecture.md", "references/mistakes.md" }
+for _, rel in ipairs(docs) do
+	local text = read(skill .. "/" .. rel) or ""
+	local base = skill .. "/" .. (rel:match("^(.*)/[^/]+$") or ".")
+	for target in text:gmatch("%]%(([^)%s]+)%)") do
+		if not target:match("^%a+://") and not target:match("^#") then
+			local path = target:gsub("#.*$", "")
+			local ok = read(base .. "/" .. path) ~= nil
+				or os.execute("test -d '" .. (base .. "/" .. path):gsub("'", "'\\''") .. "'") == 0
+			check(ok, rel .. " link resolves: " .. target)
+		end
+	end
+end
+
+-- elm-srcs.nix lists exactly the packages and versions in elm.json.
+local elm_json = cjson.decode(read(skill .. "/examples/elm.json") or "{}")
+local expected = {}
+for _, section in ipairs({ "dependencies", "test-dependencies" }) do
+	for _, kind in ipairs({ "direct", "indirect" }) do
+		for pkg, version in pairs((elm_json[section] or {})[kind] or {}) do
+			expected[pkg] = version
+		end
+	end
+end
+local pinned = {}
+local srcs = read(skill .. "/examples/elm-srcs.nix") or ""
+for pkg, body in srcs:gmatch('"([%w%-]+/[%w%-]+)"%s*=%s*(%b{})') do
+	pinned[pkg] = body:match('version%s*=%s*"([^"]+)"')
+end
+for pkg, version in pairs(expected) do
+	check(pinned[pkg] == version, "elm-srcs.nix pins " .. pkg .. " " .. version,
+		"found " .. tostring(pinned[pkg]))
+end
+for pkg in pairs(pinned) do
+	check(expected[pkg] ~= nil, "elm-srcs.nix has no package missing from elm.json: " .. pkg)
+end
+
+-- The example builds with nixpkgs' compiler by default, and elm.json names
+-- the version the skill documents as the nixpkgs default.
+local default_nix = read(skill .. "/examples/default.nix") or ""
+check(default_nix:find("pkgs.elmPackages.elm", 1, true) ~= nil,
+	"example default.nix uses the nixpkgs Elm compiler by default")
+local elm_version = elm_json["elm-version"] or ""
+check(skill_md:find("that is **" .. elm_version .. "**", 1, true) ~= nil,
+	"SKILL.md documents the example's elm-version " .. elm_version .. " as the nixpkgs default")
+
+if failures == 0 then
+	print("PASS: writing-elm skill contract")
+	os.exit(0)
+else
+	print(string.format("FAIL: writing-elm skill contract (%d failing)", failures))
+	os.exit(1)
+end
