@@ -110,6 +110,18 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_skill_review_dates"; then
+	printf 'PASS: skill review dates\n'
+else
+	printf 'FAIL: skill review dates\n' >&2
+	failures=$((failures + 1))
+fi
+
+# Skills past their review date need their researched facts re-verified.
+# Stale guidance is a reason to re-check it, not a build failure, so this
+# only reports; malformed dates fail in the test above.
+"$ROOT/bin/skill-review-dates" 2>/dev/null | sed 's/^/NOTE: re-verify skill guidance, /'
+
 if "$ROOT/tests/cli/test_planning_work"; then
 	printf 'PASS: planning-work PLAN.md helpers\n'
 else

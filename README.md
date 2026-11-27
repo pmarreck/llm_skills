@@ -95,6 +95,7 @@ for the full mechanism.
 | [`writing-roc`](writing-roc/SKILL.md) | Current Roc syntax, compiler/platform version guards, pure-core design and tested examples |
 | [`writing-bend`](writing-bend/SKILL.md) | Bend 2 affine types, executable-linked proofs, exact arithmetic, generated-JS/native embedding and tested examples |
 | [`writing-elm`](writing-elm/SKILL.md) | Elm toolchain and offline Nix builds, domain modeling, decoder traps, interop and tested examples |
+| [`writing-lean`](writing-lean/SKILL.md) | Lean 4 programs and proofs: agent proof workflow, traps and breaking changes, axiom audits, offline Nix builds, cross-language proofs and CI-compiled examples |
 | [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Required Nix builds, target-separated outputs, host-specific PATH entrypoints, and complete application bundles |
 | [`multi-implementation-contracts`](multi-implementation-contracts/SKILL.md) | Interchangeable cores, separately built ABI consumers, shared acceptance suites and canonical core/frontend mappings |
 | [`universal-app-frontend`](universal-app-frontend/SKILL.md) | Compatible GPUI package selection, shared native desktop UI architecture, platform pitfalls, and qualification |
@@ -153,6 +154,14 @@ The `description` field is the most important word in the file — that's
 what the harness pattern-matches against to decide whether to surface
 the skill. Make it specific, name the conditions, mention the trigger
 words a user is likely to say.
+
+A skill whose facts come from fast-moving upstreams (compiler versions,
+runtime flags, specifications in progress) records when it was researched
+and adds a line such as `Review after: **2027-02-27**`, normally three months
+later, telling agents to re-verify those facts once the date has passed and
+then advance it. `bin/skill-review-dates` lists overdue skills, and `./test`
+prints them as notes without failing, because stale guidance calls for
+re-verification rather than a red build.
 
 ## License
 

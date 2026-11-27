@@ -1,0 +1,101 @@
+#!/usr/bin/env luajit
+-- Lists skills whose guidance is due for re-verification. A skill opts in
+-- with a line in its SKILL.md such as:
+--
+--   Review after: **2027-02-27**
+--
+-- The check is report-only by default: guidance going stale is a reason to
+-- re-verify it, not a reason to fail a build. A malformed date is a
+-- contributor error and always fails.
+
+local USAGE = [[
+usage: skill-review-dates [--root DIR] [--today YYYY-MM-DD] [--fail-overdue]
+
+Prints one line per skill whose "Review after:" date in SKILL.md has passed:
+  overdue: NAME (review after YYYY-MM-DD)
+
+  --root DIR         Repository to scan (default: this script's repository)
+  --today DATE       Date to compare against (default: today, local time)
+  --fail-overdue     Exit 1 when any skill is overdue
+  --about            Print version and platform
+  -h, --help         Show this help
+
+Exit status: 0 normally; 1 with --fail-overdue and an overdue skill;
+2 for a malformed date or bad usage.]]
+
+local function fail_usage(message)
+	io.stderr:write("skill-review-dates: " .. message .. "\n" .. USAGE .. "\n")
+	os.exit(2)
+end
+
+local script_dir = (arg[0]:match("^(.*)/[^/]+$") or ".")
+local root = script_dir .. "/.."
+local today = os.date("%Y-%m-%d")
+local fail_overdue = false
+
+local i = 1
+while i <= #arg do
+	local a = arg[i]
+	if a == "-h" or a == "--help" then
+		print(USAGE)
+		os.exit(0)
+	elseif a == "--about" then
+		print("skill-review-dates 1.0 (LuaJIT " .. jit.version .. ", " .. jit.os .. "-" .. jit.arch .. ")")
+		os.exit(0)
+	elseif a == "--root" then
+		i = i + 1
+		root = arg[i] or fail_usage("--root needs a directory")
+	elseif a == "--today" then
+		i = i + 1
+		today = arg[i] or fail_usage("--today needs a date")
+	elseif a == "--fail-overdue" then
+		fail_overdue = true
+	else
+		fail_usage("unknown argument: " .. a)
+	end
+	i = i + 1
+end
+
+-- A real calendar date in YYYY-MM-DD form, checked by a round trip through
+-- os.time so that 2027-02-30 is rejected.
+local function valid_date(text)
+	local y, m, d = text:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)$")
+	if not y then return false end
+	local t = os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 })
+	return t ~= nil and os.date("%Y-%m-%d", t) == text
+end
+
+if not valid_date(today) then fail_usage("--today must be a real YYYY-MM-DD date: " .. today) end
+
+local function shell_quote(s)
+	return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+local listing = io.popen("ls -1 " .. shell_quote(root) .. " 2>/dev/null")
+local names = {}
+for name in listing:lines() do names[#names + 1] = name end
+listing:close()
+table.sort(names)
+
+local overdue, malformed = 0, 0
+for _, name in ipairs(names) do
+	local f = io.open(root .. "/" .. name .. "/SKILL.md", "r")
+	if f then
+		local text = f:read("*a")
+		f:close()
+		local raw = text:match("Review after:%s*%**([^%s%*%.]+)")
+		if raw then
+			if not valid_date(raw) then
+				io.stderr:write("malformed: " .. name .. " (review after " .. raw .. ")\n")
+				malformed = malformed + 1
+			elseif today > raw then
+				print("overdue: " .. name .. " (review after " .. raw .. ")")
+				overdue = overdue + 1
+			end
+		end
+	end
+end
+
+if malformed > 0 then os.exit(2) end
+if fail_overdue and overdue > 0 then os.exit(1) end
+os.exit(0)

@@ -59,7 +59,7 @@
 							# The Linux build sandbox has no /usr/bin/env, so every
 							# `#!/usr/bin/env bash` script is unrunnable until its
 							# shebang is rewritten to a store path.
-							patchShebangs ./test ./install ./tests \
+							patchShebangs ./test ./install ./tests ./bin \
 								./memories/scripts ./onboard/scripts \
 								./writing-nix/scripts ./writing-rust/scripts ./planning-work/scripts ./test-isolation/scripts
 

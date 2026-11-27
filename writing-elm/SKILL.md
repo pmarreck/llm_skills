@@ -11,6 +11,10 @@ in the Nix sandbox with Elm **0.19.2** from nixpkgs, and this repository's CI
 reruns all of it on every commit. Claims marked *researched* come from
 official docs and package metadata but were not exercised here.
 
+Review after: **2027-02-27**. Past that date, re-check the toolchain
+versions and tool behavior here against nixpkgs and the linked sources before
+relying on them, then update this date and the research date.
+
 ## Establish the toolchain first
 
 Read `elm.json` (`"elm-version"` and dependencies) and the project's Nix pin

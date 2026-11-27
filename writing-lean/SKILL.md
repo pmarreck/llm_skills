@@ -11,6 +11,10 @@ compiles with nixpkgs' Lean and passes an axiom audit in this repository's CI.
 Claims marked *researched* in the references come from documentation and were
 not run.
 
+Review after: **2027-02-27**. Lean releases monthly, so past that date read
+the release notes since 4.35, re-check the version-specific claims in the
+references, then update this date and the research date.
+
 Use Lean as both a programming language and a proof checker, without
 conflating successful execution, cross-implementation agreement and a
 kernel-checked theorem.

@@ -1,0 +1,102 @@
+#!/usr/bin/env luajit
+-- Tests bin/skill-review-dates as a classifier over a set of fixture skills
+-- at several injected dates, plus the contract that every researched skill
+-- in this repository carries a valid review date.
+
+local script_dir = arg[0]:match("^(.*)/[^/]+$") or "."
+local root = script_dir .. "/../.."
+local tool = root .. "/bin/skill-review-dates"
+
+local failures = 0
+local function check(ok, label, detail)
+	if ok then
+		print("ok - " .. label)
+	else
+		failures = failures + 1
+		print("not ok - " .. label .. (detail and (" | " .. detail) or ""))
+	end
+end
+
+local function shell_quote(s)
+	return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+-- Removes only directories this test created from its own mktemp template.
+local function remove_sandbox(path)
+	if path and path:match("/skill%-review%-dates%.[%w]+$") then
+		os.execute("rm -rf -- " .. shell_quote(path))
+	end
+end
+
+-- Runs the tool and returns stdout, stderr and the exit status.
+local function run(args, fixture)
+	local out = fixture .. "/.out"
+	local err = fixture .. "/.err"
+	local ok, _, code = os.execute(shell_quote(tool) .. " " .. args .. " >" .. shell_quote(out) .. " 2>" .. shell_quote(err))
+	local status = type(ok) == "number" and ok / 256 or (code or (ok and 0 or 1))
+	local function slurp(p)
+		local f = io.open(p, "r"); local t = f and f:read("*a") or ""; if f then f:close() end; return t
+	end
+	return slurp(out), slurp(err), status
+end
+
+local tmp = io.popen([[mktemp -d "${TMPDIR:-/tmp}/skill-review-dates.XXXXXX"]]):read("*l")
+local fixture = tmp .. "/skills"
+os.execute("mkdir -p " .. shell_quote(fixture))
+local skills = {
+	future = "Researched 2026-11-27. Review after: **2027-02-27**.\n",
+	past = "Review after: **2026-01-01**\n",
+	today = "Review after: 2026-11-27\n",
+	unmarked = "No review date here.\n",
+}
+for name, body in pairs(skills) do
+	os.execute("mkdir -p " .. shell_quote(fixture .. "/" .. name))
+	local f = io.open(fixture .. "/" .. name .. "/SKILL.md", "w"); f:write(body); f:close()
+end
+
+local out, err, status = run("--root " .. shell_quote(fixture) .. " --today 2026-11-27", fixture)
+check(status == 0, "report-only run exits 0", tostring(status))
+check(out == "overdue: past (review after 2026-01-01)\n",
+	"only the past date is overdue; due today and future are not; unmarked is ignored", out)
+check(err == "", "a clean run writes nothing to stderr", err)
+
+out, _, status = run("--root " .. shell_quote(fixture) .. " --today 2026-11-28 --fail-overdue", fixture)
+check(status == 1, "--fail-overdue exits 1 when a skill is overdue", tostring(status))
+check(out == "overdue: past (review after 2026-01-01)\noverdue: today (review after 2026-11-27)\n",
+	"the day after a review date makes it overdue, in sorted order", out)
+
+out, _, status = run("--root " .. shell_quote(fixture) .. " --today 2025-12-31 --fail-overdue", fixture)
+check(status == 0 and out == "", "nothing is overdue before every review date", out)
+
+-- A malformed date always fails, even without --fail-overdue.
+os.execute("mkdir -p " .. shell_quote(fixture .. "/broken"))
+local f = io.open(fixture .. "/broken/SKILL.md", "w"); f:write("Review after: **2027-02-30**\n"); f:close()
+out, err, status = run("--root " .. shell_quote(fixture) .. " --today 2026-11-27", fixture)
+check(status == 2, "an impossible calendar date exits 2", tostring(status))
+check(err:find("malformed: broken (review after 2027-02-30)", 1, true) ~= nil, "the malformed date is named", err)
+
+_, err, status = run("--root " .. shell_quote(fixture) .. " --today 2026-13-01", fixture)
+check(status == 2 and err:find("--today", 1, true) ~= nil, "a bad --today is a usage error", err)
+
+remove_sandbox(tmp)
+
+-- Every skill whose facts were researched against fast-moving upstreams
+-- carries a valid review date, and the real repository has none malformed.
+for _, name in ipairs({ "writing-elm", "writing-lean" }) do
+	local sf = io.open(root .. "/" .. name .. "/SKILL.md", "r")
+	local text = sf and sf:read("*a") or ""
+	if sf then sf:close() end
+	check(text:match("Review after:%s*%**%d%d%d%d%-%d%d%-%d%d") ~= nil, name .. " has a review date")
+end
+local scratch = io.popen([[mktemp -d "${TMPDIR:-/tmp}/skill-review-dates.XXXXXX"]]):read("*l")
+_, err, status = run("--root " .. shell_quote(root), scratch)
+remove_sandbox(scratch)
+check(status == 0, "no skill in this repository has a malformed review date", err)
+
+if failures == 0 then
+	print("PASS: skill review dates")
+	os.exit(0)
+else
+	print(string.format("FAIL: skill review dates (%d failing)", failures))
+	os.exit(1)
+end
