@@ -1,0 +1,106 @@
+#!/usr/bin/env luajit
+-- Contract tests for the writing-webassembly skill: required files exist, the
+-- frontmatter is valid and carries the trigger words agents search for, every
+-- relative Markdown link resolves, and CI builds and runs every example. The
+-- flake checks themselves run the examples under wasmtime; this file keeps
+-- the cheap structural contract.
+
+local script_dir = arg[0]:match("^(.*)/[^/]+$") or "."
+local root = script_dir .. "/../.."
+local skill = root .. "/writing-webassembly"
+
+local failures = 0
+local function check(ok, label, detail)
+	if ok then
+		print("ok - " .. label)
+	else
+		failures = failures + 1
+		print("not ok - " .. label .. (detail and (" | " .. detail) or ""))
+	end
+end
+
+local function read(path)
+	local f = io.open(path, "r")
+	if not f then return nil end
+	local text = f:read("*a")
+	f:close()
+	return text
+end
+
+local function shell_quote(s)
+	return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+local references = {
+	"references/wasi.md",
+	"references/wat-and-testing.md",
+	"references/embedding.md",
+}
+local required = {
+	"SKILL.md",
+	"agents/openai.yaml",
+	"examples/default.nix",
+	"examples/wat/math.wat",
+	"examples/wat/math-tests.wast",
+	"examples/wasi/sandbox.rs",
+	"examples/wasi/temp_dir_trap.rs",
+}
+for _, rel in ipairs(references) do required[#required + 1] = rel end
+for _, rel in ipairs(required) do
+	check(read(skill .. "/" .. rel) ~= nil, "writing-webassembly includes " .. rel)
+end
+
+local skill_md = read(skill .. "/SKILL.md") or ""
+local name = skill_md:match("^%-%-%-\nname: ([^\n]+)\n")
+local description = skill_md:match("\ndescription: ([^\n]+)\n") or ""
+check(name == "writing-webassembly", "frontmatter name is writing-webassembly", tostring(name))
+check(#description > 0 and #description <= 1024,
+	"frontmatter description exists and fits 1024 characters", tostring(#description))
+-- The skill must surface for each spelling agents and users actually use.
+for _, word in ipairs({ "WebAssembly", "Wasm", "WASM", "WASI", "WAT", "WAST", "wasm32", "temp_dir" }) do
+	check(description:find(word, 1, true) ~= nil, "description mentions " .. word)
+end
+local openai = read(skill .. "/agents/openai.yaml") or ""
+check(openai:find("$writing-webassembly", 1, true) ~= nil, "agents/openai.yaml invokes $writing-webassembly")
+
+-- Every relative link in the skill's Markdown resolves.
+local docs = { "SKILL.md" }
+for _, rel in ipairs(references) do docs[#docs + 1] = rel end
+for _, rel in ipairs(docs) do
+	local text = read(skill .. "/" .. rel) or ""
+	local base = skill .. "/" .. (rel:match("^(.*)/[^/]+$") or ".")
+	for target in text:gmatch("%]%(([^)%s]+)%)") do
+		if not target:match("^%a+://") and not target:match("^#") then
+			local path = target:gsub("#.*$", "")
+			local ok = read(base .. "/" .. path) ~= nil
+				or os.execute("test -d " .. shell_quote(base .. "/" .. path)) == 0
+			check(ok, rel .. " link resolves: " .. target)
+		end
+	end
+end
+
+-- The WAST file holds assertions only, so it always tests math.wat itself.
+local wast = read(skill .. "/examples/wat/math-tests.wast") or ""
+check(not wast:find("%(module"), "math-tests.wast does not define its own copy of the module")
+
+-- CI builds and runs every example.
+local examples = read(skill .. "/examples/default.nix") or ""
+local flake = read(root .. "/flake.nix") or ""
+local targets = read(root .. "/.mechatron-prime/targets") or ""
+check(flake:find("./writing-webassembly/examples", 1, true) ~= nil,
+	"flake.nix checks build writing-webassembly/examples")
+local checks = 0
+for check_name in examples:gmatch("\n  ([%w%-]+) = pkgs%.runCommand") do
+	checks = checks + 1
+	check(targets:find("checks.x86_64-linux.writing-webassembly-" .. check_name, 1, true) ~= nil,
+		"Mechatron CI builds writing-webassembly-" .. check_name)
+end
+check(checks >= 3, "examples/default.nix defines at least three checks", tostring(checks))
+
+if failures == 0 then
+	print("PASS: writing-webassembly skill contract")
+	os.exit(0)
+else
+	print(string.format("FAIL: writing-webassembly skill contract (%d failing)", failures))
+	os.exit(1)
+end

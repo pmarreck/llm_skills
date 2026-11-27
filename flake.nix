@@ -118,7 +118,12 @@
 					# sorry and nonstandard axioms: a Lean update that breaks a worked
 					# example or its lemma names turns CI red.
 					writing-lean-examples = import ./writing-lean/examples/checks.nix { inherit pkgs; };
-				});
+				}
+				# The writing-webassembly examples (WAT and WAST, a WASI sandbox, and
+				# the WASI temp_dir trap), built and run under wasmtime offline.
+				// pkgs.lib.mapAttrs'
+					(name: check: pkgs.lib.nameValuePair "writing-webassembly-${name}" check)
+					(import ./writing-webassembly/examples { inherit pkgs; }));
 
 			devShells = forAllSystems (system:
 				let pkgs = pkgsFor system;

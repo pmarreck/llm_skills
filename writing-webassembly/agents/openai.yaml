@@ -1,0 +1,4 @@
+interface:
+  display_name: "Writing WebAssembly"
+  short_description: "Build and test Wasm, WASI and WAT code"
+  default_prompt: "Use $writing-webassembly to build, test or debug this WebAssembly, WASI or WAT work."

@@ -82,7 +82,7 @@ remove_sandbox(tmp)
 
 -- Every skill whose facts were researched against fast-moving upstreams
 -- carries a valid review date, and the real repository has none malformed.
-for _, name in ipairs({ "writing-elm", "writing-lean" }) do
+for _, name in ipairs({ "writing-elm", "writing-lean", "writing-webassembly" }) do
 	local sf = io.open(root .. "/" .. name .. "/SKILL.md", "r")
 	local text = sf and sf:read("*a") or ""
 	if sf then sf:close() end

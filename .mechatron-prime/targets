@@ -15,3 +15,9 @@ checks.x86_64-linux.writing-elm-example-checks
 # The writing-lean examples: each compiles with nixpkgs' Lean without
 # warnings and uses only Lean's standard axioms.
 checks.x86_64-linux.writing-lean-examples
+
+# The writing-webassembly examples: WAT and WAST assertions, a WASI sandbox,
+# and the WASI temp_dir trap, each built and run under wasmtime offline.
+checks.x86_64-linux.writing-webassembly-wat
+checks.x86_64-linux.writing-webassembly-wasi-sandbox
+checks.x86_64-linux.writing-webassembly-wasi-temp-dir

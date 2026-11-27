@@ -95,6 +95,7 @@ for the full mechanism.
 | [`writing-roc`](writing-roc/SKILL.md) | Current Roc syntax, compiler/platform version guards, pure-core design and tested examples |
 | [`writing-bend`](writing-bend/SKILL.md) | Bend 2 affine types, executable-linked proofs, exact arithmetic, generated-JS/native embedding and tested examples |
 | [`writing-elm`](writing-elm/SKILL.md) | Elm toolchain and offline Nix builds, domain modeling, decoder traps, interop and tested examples |
+| [`writing-webassembly`](writing-webassembly/SKILL.md) | Wasm, WASI and WAT/WAST: WASI's capability model and missing temp directory, targets and runtimes, testing under Wasmtime, embedding untrusted Wasm, and CI-run examples |
 | [`writing-lean`](writing-lean/SKILL.md) | Lean 4 programs and proofs: agent proof workflow, traps and breaking changes, axiom audits, offline Nix builds, cross-language proofs and CI-compiled examples |
 | [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Required Nix builds, target-separated outputs, host-specific PATH entrypoints, and complete application bundles |
 | [`multi-implementation-contracts`](multi-implementation-contracts/SKILL.md) | Interchangeable cores, separately built ABI consumers, shared acceptance suites and canonical core/frontend mappings |

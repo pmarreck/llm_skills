@@ -110,6 +110,13 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_writing_webassembly_skill"; then
+	printf 'PASS: writing-webassembly skill contract\n'
+else
+	printf 'FAIL: writing-webassembly skill contract\n' >&2
+	failures=$((failures + 1))
+fi
+
 if "$ROOT/tests/cli/test_skill_review_dates"; then
 	printf 'PASS: skill review dates\n'
 else
