@@ -1,5 +1,5 @@
 ---
-name: ship
+name: ship-it
 description: Use when shipping work - commit/push and watch Mechatron Prime CI, delegate CI setup/badges to the mechatron-ci skill, or cut a tagged GitHub release. Triggers - "ship", "push", "check CI", "add CI", "release", "tag it".
 ---
 

@@ -94,7 +94,7 @@ for the full mechanism.
 | [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Required Nix builds, target-separated outputs, host-specific PATH entrypoints, and complete application bundles |
 | [`universal-app-frontend`](universal-app-frontend/SKILL.md) | Compatible GPUI package selection, shared native desktop UI architecture, platform pitfalls, and qualification |
 | [`test-isolation`](test-isolation/SKILL.md) | Disposable test state, safe publication tests and a Linux read-only-filesystem execution gate |
-| [`ship`](ship/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases |
+| [`ship-it`](ship-it/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases (named to avoid Claude Code's built-in `/ship`) |
 | [`mechatron-ci`](mechatron-ci/SKILL.md) | Configure or audit a project for Thelio-hosted Mechatron Prime CI |
 
 ### Zig-specific
