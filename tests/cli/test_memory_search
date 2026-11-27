@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Coverage note: these filesystem tests do not force readdir to return
+# DT_UNKNOWN. The lstat fallback and its platform-specific stat layout are not
+# independently verified by this suite, even when the ordinary cases pass.
+set -eu
+root=$(cd -- "$(dirname -- "$0")/../.." && pwd -P)
+scratch=$(mktemp -d "${TMPDIR:-/tmp}/memory-test.XXXXXXXX")
+trap 'command rm -rf "$scratch"' EXIT
+mkdir -p "$scratch/home/MEMORIES/.codescan" "$scratch/project/MEMORIES" "$scratch/empty"
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -C "$scratch/project" init -q
+mkdir -p "$scratch/project/nested"
+cat > "$scratch/home/MEMORIES/alpha.frontmatter.md" <<'EOF'
+---
+description: "Nix memory"
+datetime: 2026-01-01T00:00:00Z
+tags: [nix, build]
+---
+Zig and zig.
+EOF
+cat > "$scratch/project/MEMORIES/beta.frontmatter.md" <<'EOF'
+---
+description: "Zig memory"
+datetime: 2026-01-01T00:00:00Z
+tags: [zig]
+---
+Nix.
+EOF
+printf 'nix\n' > "$scratch/home/MEMORIES/.codescan/ignored.frontmatter.md"
+ln -s "$scratch/home/MEMORIES/alpha.frontmatter.md" "$scratch/project/MEMORIES/symlink.frontmatter.md"
+export HOME="$scratch/home"
+memory="${MEMORY_CMD:-$root/memories/scripts/memory}"
+"$memory" list --project-root "$scratch/project" > "$scratch/list"
+[ "$(wc -l < "$scratch/list")" -eq 2 ]
+"$memory" search --project-root "$scratch/project" nix zig > "$scratch/search"
+expected=$(printf '13\tglobal\t%s\n12\tproject\t%s' "$HOME/MEMORIES/alpha.frontmatter.md" "$scratch/project/MEMORIES/beta.frontmatter.md")
+[ "$(cat "$scratch/search")" = "$expected" ]
+"$memory" search --project-root "$scratch/project" --tags nix > "$scratch/tags"
+[ "$(cat "$scratch/tags")" = "$(printf '3\tglobal\t%s' "$HOME/MEMORIES/alpha.frontmatter.md")" ]
+"$memory" search --project-root "$scratch/project" --content zig > "$scratch/body"
+[ "$(cat "$scratch/body")" = "$(printf '2\tglobal\t%s' "$HOME/MEMORIES/alpha.frontmatter.md")" ]
+[ "$("$memory" list --project --project-root "$scratch/project" | wc -l)" -eq 1 ]
+[ "$(cd "$scratch/project/nested" && "$memory" list --project | wc -l)" -eq 1 ]
+[ "$("$memory" list --global --project-root "$scratch/empty" | wc -l)" -eq 1 ]
+if "$memory" list --project-root "$scratch/project/MEMORIES/beta.frontmatter.md" >/dev/null 2>&1; then exit 1; fi
+[ -z "$("$memory" search --project-root "$scratch/project" absent)" ]
+[ "$("$memory" search --project-root "$scratch/project" --limit 1 nix zig | wc -l)" -eq 1 ]
+[ "$("$memory" search --project-root "$scratch/project" --limit 0 nix zig | wc -l)" -eq 2 ]
+"$memory" search --project-root "$scratch/project" --excerpt nix > "$scratch/excerpt"
+command rg -q 'description: "Nix memory"' "$scratch/excerpt"
+if "$memory" search --project-root "$scratch/project" >/dev/null 2>&1; then exit 1; fi
+printf '\nLiteral a.b and -option\n' >> "$scratch/project/MEMORIES/beta.frontmatter.md"
+[ "$("$memory" search --project-root "$scratch/project" --content 'a.b' | wc -l)" -eq 1 ]
+[ "$("$memory" search --project-root "$scratch/project" -- -option | wc -l)" -eq 1 ]
+printf '\nÉCOLE\n' >> "$scratch/project/MEMORIES/beta.frontmatter.md"
+if command -v locale >/dev/null && locale -a | command rg -qi '^C\.(UTF-8|utf8)$'; then
+	[ "$(LC_ALL=C.UTF-8 "$memory" search --project-root "$scratch/project" --content école | wc -l)" -eq 1 ]
+fi
+for i in {1..23}; do
+	printf '%s\n' '---' 'description: "result"' 'datetime: 2026-01-01T00:00:00Z' 'tags: [memory]' '---' 'limitfixture' > "$HOME/MEMORIES/extra-$i.frontmatter.md"
+done
+[ "$("$memory" search --global limitfixture | wc -l)" -eq 20 ]
+[ "$("$memory" search --global --limit 0 limitfixture | wc -l)" -eq 23 ]

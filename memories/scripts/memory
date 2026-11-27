@@ -1,0 +1,203 @@
+#!/usr/bin/env luajit
+-- File-based memory search. POSIX directory access uses LuaJIT's built-in FFI.
+local ffi = require('ffi')
+local bit = require('bit')
+ffi.cdef[[
+typedef struct __memory_dir DIR;
+DIR *opendir(const char *name);
+void *readdir(DIR *dirp);
+int closedir(DIR *dirp);
+int lstat(const char *path, void *buf);
+int access(const char *path, int mode);
+char *realpath(const char *path, char *resolved_path);
+void free(void *ptr);
+char *setlocale(int category, const char *locale);
+unsigned int towlower(unsigned int wc);
+]]
+if not ffi.abi('64bit') or (jit.os ~= 'Linux' and jit.os ~= 'OSX') or (jit.arch ~= 'x64' and jit.arch ~= 'arm64') then
+  io.stderr:write('memory: LuaJIT implementation supports amd64 and arm64 on Linux and macOS\n'); os.exit(2)
+end
+if jit.os == 'Linux' then
+  ffi.cdef[[struct memory_dirent { uint64_t ino; int64_t offset; uint16_t reclen; uint8_t type; char name[256]; };]]
+else
+  ffi.cdef[[struct memory_dirent { uint64_t ino; uint64_t seekoff; uint16_t reclen; uint16_t namlen; uint8_t type; char name[1024]; };]]
+end
+local C = ffi.C
+-- Match the host locale's character lowering without bringing in a Unicode
+-- library. The all-ASCII path stays inside LuaJIT's optimized string.lower.
+C.setlocale(jit.os == 'Linux' and 0 or 2, '')
+local function lower(text)
+  if not text:find('[\128-\255]') then return text:lower() end
+  local out, pos = {}, 1
+  while pos <= #text do
+    local b=text:byte(pos); local count, value
+    if b < 128 then count=1; value=b
+    elseif b >= 194 and b <= 223 then count=2; value=b-192
+    elseif b >= 224 and b <= 239 then count=3; value=b-224
+    elseif b >= 240 and b <= 244 then count=4; value=b-240
+    else count=1 end
+    if value and count > 1 then
+      for offset=1,count-1 do
+        local nextbyte=text:byte(pos+offset)
+        if not nextbyte or nextbyte < 128 or nextbyte > 191 then value=nil; break end
+        value=value*64+nextbyte-128
+      end
+    end
+    if not value then out[#out+1]=text:sub(pos,pos); pos=pos+1
+    else
+      local cp=tonumber(C.towlower(value))
+      if cp < 128 then out[#out+1]=string.char(cp)
+      elseif cp < 2048 then out[#out+1]=string.char(192+math.floor(cp/64),128+cp%64)
+      elseif cp < 65536 then out[#out+1]=string.char(224+math.floor(cp/4096),128+math.floor(cp/64)%64,128+cp%64)
+      else out[#out+1]=string.char(240+math.floor(cp/262144),128+math.floor(cp/4096)%64,128+math.floor(cp/64)%64,128+cp%64) end
+      pos=pos+count
+    end
+  end
+  return table.concat(out)
+end
+local function fail(message, status) io.stderr:write('memory: ', message, '\n'); os.exit(status or 1) end
+local function canonical(path)
+  local p = C.realpath(path, nil)
+  if p == nil then return nil end
+  local s = ffi.string(p); C.free(p); return s
+end
+local function usage()
+  io.write([[Usage: memory [list] [--global|--project] [--project-root PATH]
+       memory search [--global|--project] [--project-root PATH] [--tags] [--content] [--limit N] [--excerpt] KEYWORD...
+
+List both scopes by default. Search is case-insensitive, literal OR: each
+occurrence adds 3 points in frontmatter or 1 in the body; each additional
+distinct matching term adds 5. --tags and --content restrict the search.
+Results are sorted by descending score, then scope and path. Default limit: 20;
+--limit 0 shows all. --excerpt adds one matching line. No index is built.
+Use -- before keywords beginning with a hyphen. Project scope defaults to the
+current Git repository root, or the current directory outside a repository.
+]])
+end
+local mode, scope, root, tags, content, limit, excerpts = 'list', 'all', nil, false, false, 20, false
+local terms, i = {}, 1
+while i <= #arg do
+  local a = arg[i]
+  if a == '--help' or a == '-h' then usage(); return
+  elseif a == '--about' then
+    local osname = jit.os == 'Linux' and 'linux' or 'macos'
+    local arch = ({x64='amd64', arm64='arm64'})[jit.arch] or 'unknown'
+    print('memory 1.0: file-based memory listing and search; PF=' .. osname .. '-' .. arch); return
+  elseif a == '--global' or a == '--project' then
+    if scope ~= 'all' then fail('choose one scope', 2) end
+    scope = a:sub(3)
+  elseif a == '--project-root' then i=i+1; root=arg[i]; if not root then fail('--project-root needs a path', 2) end
+  elseif a == '--limit' or a == '-n' then
+    i=i+1; local n=arg[i]; if not n or not n:match('^%d+$') then fail('--limit needs a nonnegative integer', 2) end
+    limit=tonumber(n)
+  elseif a == '--excerpt' or a == '--excerpts' then excerpts=true
+  elseif a == '--tags' then tags=true
+  elseif a == '--content' then content=true
+  elseif a == '--' then for j=i+1,#arg do terms[#terms+1]=arg[j] end; break
+  elseif a == 'search' and mode == 'list' and #terms == 0 then mode='search'
+  elseif a == 'list' and mode == 'list' and #terms == 0 then
+  elseif a:sub(1,1) == '-' then fail('unknown option: '..a, 2)
+  else terms[#terms+1]=a end
+  i=i+1
+end
+if mode == 'list' and #terms > 0 then mode='search' end
+if mode == 'search' and #terms == 0 then fail('search needs at least one keyword', 2) end
+if mode == 'list' and (tags or content) then fail('--tags and --content require search keywords', 2) end
+local home=os.getenv('HOME'); if not home or home == '' then fail('HOME is not set', 2) end
+local seen, keywords = {}, {}
+for _, term in ipairs(terms) do
+  if term == '' or term:find('[\r\n]') then fail('keywords must be nonempty single lines', 2) end
+  term=lower(term); if not seen[term] then seen[term]=true; keywords[#keywords+1]=term end
+end
+if not root then
+  root=canonical('.') or fail('cannot resolve current directory', 2)
+  local p=root
+  while p do
+    if C.access(p .. '/.git', 0) == 0 then root=p; break end
+    if p == '/' then break end
+    p=p:match('^(.*)/[^/]+$'); if p == '' then p='/' end
+  end
+end
+root=canonical(root); if not root then fail('project root is not a directory', 2) end
+local root_handle=C.opendir(root)
+if root_handle == nil then fail('project root is not a readable directory', 2) end
+C.closedir(root_handle)
+local global_root=home..'/MEMORIES'
+local project_root=root..'/MEMORIES'
+local results={}
+local function record(path, label)
+  if mode == 'list' then results[#results+1]={scope=label,path=path}; return end
+  local f, err=io.open(path, 'rb'); if not f then fail('cannot read '..path..': '..tostring(err)) end
+  local score, matched_count, matched, sample, header, first=0,0,{},'',false,true
+  for line in f:lines() do
+    local skip=false
+    if first then first=false; header=(line == '---'); skip=header
+    elseif header and line == '---' then header=false; skip=true end
+    if not skip and (not tags and not content or header and tags and line:match('^tags:') or not header and content) then
+      local low=lower(line); local weight=header and 3 or 1
+      for index, keyword in ipairs(keywords) do
+        local start=1
+        while true do
+          local at=low:find(keyword,start,true); if not at then break end
+          score=score+weight
+          if not matched[index] then matched[index]=true; matched_count=matched_count+1 end
+          if sample == '' then sample=line:sub(1,160):gsub('\t',' ') end
+          start=at+#keyword
+        end
+      end
+    end
+  end
+  local ok, closeerr=f:close(); if not ok then fail('cannot close '..path..': '..tostring(closeerr)) end
+  if score > 0 then results[#results+1]={scope=label,path=path,score=score+5*(matched_count-1),sample=sample} end
+end
+local function entry_type(path, dtype)
+  if dtype ~= 0 then return dtype end
+  -- Some filesystems return DT_UNKNOWN. lstat is read into an aligned, extra-large
+  -- buffer; st_mode's documented ABI offset differs across supported targets.
+  local buf=ffi.new('uint64_t[64]')
+  if C.lstat(path,buf) ~= 0 then fail('cannot inspect '..path..' (errno '..ffi.errno()..')') end
+  local bytes=ffi.cast('uint8_t*',buf)
+  local modebits
+  if jit.os == 'OSX' then modebits=ffi.cast('uint16_t*',bytes+4)[0]
+  else modebits=ffi.cast('uint32_t*',bytes+(jit.arch == 'x64' and 24 or 16))[0] end
+  local kind=bit.band(modebits,0xF000)
+  if kind == 0x4000 then return 4 elseif kind == 0x8000 then return 8 else return 0 end
+end
+local function walk(dir, label, optional)
+  local handle=C.opendir(dir)
+  if handle == nil then if optional and ffi.errno() == 2 then return end; fail('cannot open '..dir..' (errno '..ffi.errno()..')') end
+  while true do
+    ffi.errno(0); local p=C.readdir(handle)
+    if p == nil then
+      local err=ffi.errno(); C.closedir(handle)
+      if err ~= 0 then fail('cannot read directory '..dir..' (errno '..err..')') end
+      break
+    end
+    local entry=ffi.cast('struct memory_dirent*',p)
+    local name=ffi.string(entry.name)
+    if name ~= '.' and name ~= '..' and name ~= '.git' and name ~= '.codescan' then
+      local path=dir..'/'..name; local kind=entry_type(path,entry.type)
+      if kind == 4 then walk(path,label,false)
+      elseif kind == 8 and name:sub(-15) == '.frontmatter.md' then record(path,label) end
+    end
+  end
+end
+if scope ~= 'project' then walk(global_root,'global',true) end
+if scope ~= 'global' then
+  local a,b=canonical(global_root),canonical(project_root)
+  if not a or not b or a ~= b then walk(project_root,'project',true) end
+end
+table.sort(results,function(a,b)
+  if mode == 'search' and a.score ~= b.score then return a.score > b.score end
+  if a.scope ~= b.scope then return a.scope < b.scope end
+  return a.path < b.path
+end)
+local count=mode == 'search' and limit ~= 0 and math.min(limit,#results) or #results
+for j=1,count do
+  local r=results[j]
+  if mode == 'search' then
+    io.write(r.score,'\t',r.scope,'\t',r.path)
+    if excerpts then io.write('\t',r.sample) end
+    io.write('\n')
+  else io.write(r.scope,'\t',r.path,'\n') end
+end

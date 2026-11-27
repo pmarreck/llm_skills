@@ -95,6 +95,34 @@ tags: [memory, memories, metadata, frontmatter]
 
 ## Recall and validation
 
+Use the `memory` CLI for a combined project and shared listing or a direct,
+file-based search. Install `bin/memory` on PATH (or call
+`memories/scripts/memory` directly). It reads only the requested project's
+memory root and `$HOME/MEMORIES`, ignores `.git` and `.codescan`, and creates
+no database or index.
+
+```bash
+memory list                           # both scopes, filenames only
+memory list --global                  # shared memories only
+memory list --project                 # current project's memories only
+memory search nix zig                 # OR search, ranked by occurrence
+memory search --tags nix zig          # tags only
+memory search --content nix zig       # bodies only
+memory search --limit 5 --excerpt nix zig # top five with matching line
+memory search --project-root ~/Code/PROJECT keyword
+```
+
+Search is case-insensitive and literal. Each occurrence contributes three
+points in frontmatter or one in a body. Each additional distinct matching term
+adds five points. LuaJIT reads and ranks the memory files directly; there is no
+database or index. Search returns at most 20 results by default;
+`--limit 0` shows all. Results show score, scope and path. `--excerpt` adds a
+matching line, which can contain private details. Use listing when only
+filenames are needed.
+
+The command uses LuaJIT and its built-in FFI on 64-bit Linux and macOS. It does
+not invoke Bash, `rg`, `awk`, or Git to enumerate or search memories.
+
 List both the shared and current-project indexes in one deterministic,
 scope-labeled pass. The default reads filenames only; pass a project root when
 the working directory is not the project you mean:
