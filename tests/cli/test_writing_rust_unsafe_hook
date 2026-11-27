@@ -111,6 +111,13 @@ check(read_file(reference) ~= "", "reference document exists")
 advises("Edit adding an unsafe block warns", edit(rs,
 	"fn f(p: *const u8) -> u8 { 0 }",
 	"fn f(p: *const u8) -> u8 { unsafe { *p } }"), "lib.rs")
+do
+	local stdout = run(edit(rs, "fn f() {}", "fn f() { unsafe { g() } }"))
+	local ok, decoded = pcall(cjson.decode, stdout)
+	local ctx = ok and type(decoded) == "table" and (decoded.hookSpecificOutput or {}).additionalContext or ""
+	check(ctx:find("Cargo feature", 1, true) and ctx:find("BOTH paths under test", 1, true),
+		"advisory offers the feature-gated alternative with both paths under test", "context=" .. ctx)
+end
 silent("Edit with no unsafe change is silent", edit(rs, "let a = 1;", "let a = 2;"))
 silent("Edit removing unsafe is silent", edit(rs, "unsafe { *p }", "p.read()"))
 silent("Edit keeping the same unsafe count is silent",

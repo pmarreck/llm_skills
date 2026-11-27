@@ -199,9 +199,10 @@ local function advisory(increases)
 			.. " first, commenting where unsafe would help and what it would buy. (b) Benchmark it."
 			.. " (c) Write the unsafe version behind the same safe API. (d) Benchmark it with the same"
 			.. " harness, inputs and build profile. (e) Choose on the numbers, and keep the version you"
-			.. " did not choose commented out and intact beside the winner, with both measurements and"
-			.. " the compromise explained. No measurements, no unsafe. If the gain is within noise,"
-			.. " choose safe.",
+			.. " did not choose alive, with both measurements and the compromise explained: preferably"
+			.. " compiled behind a non-default Cargo feature with BOTH paths under test, otherwise"
+			.. " commented out and intact beside the winner. No measurements, no unsafe. If the gain"
+			.. " is within noise, choose safe.",
 		"2. NO SAFE EQUIVALENT (FFI, intrinsics): keep each block minimal inside a safe wrapper,"
 			.. " put a `// SAFETY:` comment on every block naming the invariants it relies on, and"
 			.. " test the boundary (Miri where it applies).",

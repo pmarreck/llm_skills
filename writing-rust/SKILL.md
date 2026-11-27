@@ -73,8 +73,11 @@ Treat `unsafe` as a last resort that must earn its place with evidence. Add it
 only for a measured performance win the owner accepts, or for an operation with
 no safe equivalent (FFI, intrinsics). For performance, never write the unsafe
 version first: write and benchmark a safe version, then an unsafe one with the
-same harness, choose on the numbers, and keep the loser commented out and
-intact with both measurements and the compromise explained. Crates that need
+same harness, choose on the numbers, and keep the loser alive with both
+measurements and the compromise explained: preferably compiled behind a
+non-default Cargo feature with both paths under test, otherwise commented out
+and intact. Cargo features are also the tool when an application needs to
+choose per build how much `unsafe` to lean on. Crates that need
 no `unsafe` declare `#![forbid(unsafe_code)]`; crates that do confine it with a
 crate-level `deny` and module-level `allow`, with a `// SAFETY:` comment on
 every block. Read [unsafe Rust](references/unsafe-code.md) before adding or
