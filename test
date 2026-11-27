@@ -82,6 +82,13 @@ else
 	failures=$((failures + 1))
 fi
 
+if "$ROOT/tests/cli/test_writing_rust_unsafe_hook"; then
+	printf 'PASS: writing-rust unsafe advisory hook\n'
+else
+	printf 'FAIL: writing-rust unsafe advisory hook\n' >&2
+	failures=$((failures + 1))
+fi
+
 if "$ROOT/tests/cli/test_planning_work"; then
 	printf 'PASS: planning-work PLAN.md helpers\n'
 else

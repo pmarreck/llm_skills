@@ -1,0 +1,239 @@
+#!/usr/bin/env luajit
+-- unsafe-advisory-hook: PreToolUse advisory for new `unsafe` Rust code.
+--
+-- Serves Claude Code (Write, Edit, MultiEdit) and Codex (apply_patch, whose
+-- tool_input.command carries the patch text). When an edit increases the
+-- number of real `unsafe` keywords in a .rs file, it prints a
+-- hookSpecificOutput.additionalContext advisory that points at the
+-- writing-rust unsafe protocol. It always exits 0 so the edit proceeds: this
+-- is advice, not a gate. Comments, string literals, char literals, raw
+-- identifiers and lint names such as unsafe_code do not count, so the
+-- commented-out alternative the protocol requires never triggers it.
+--
+-- Exit 1 (a visible, non-blocking hook error) only when lua-cjson is missing,
+-- so a broken environment is noticed instead of silently disabling advice.
+
+local ok_json, cjson = pcall(require, "cjson")
+if not ok_json then
+	io.stderr:write("unsafe-advisory-hook: lua-cjson is unavailable; Rust unsafe advice skipped\n")
+	os.exit(1)
+end
+
+local script_dir = (arg and arg[0] or ""):match("^(.*)/[^/]+$") or "."
+local function resolve(path)
+	local p = io.popen("cd " .. "'" .. path:gsub("'", "'\\''") .. "'" .. " 2>/dev/null && pwd -P")
+	local out = p and p:read("*l") or nil
+	if p then p:close() end
+	return out
+end
+local skill_dir = resolve(script_dir .. "/..") or (script_dir .. "/..")
+local REFERENCE = skill_dir .. "/references/unsafe-code.md"
+
+-- Count `unsafe` keyword tokens in Rust source, skipping comments (nested
+-- block comments included), string and raw string literals, char literals
+-- and raw identifiers.
+local function is_ident_start(b)
+	return (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 95
+end
+local function is_ident(b)
+	return is_ident_start(b) or (b >= 48 and b <= 57)
+end
+
+local function skip_raw_string(s, i, n)
+	-- s:sub(i) begins just after the r of r"..." or r#"..."#.
+	local hashes = 0
+	while i <= n and s:byte(i) == 35 do hashes = hashes + 1; i = i + 1 end
+	if i > n or s:byte(i) ~= 34 then return nil end
+	local close = '"' .. string.rep("#", hashes)
+	local e = s:find(close, i + 1, true)
+	return e and (e + #close) or (n + 1)
+end
+
+local function count_unsafe(s)
+	if not s or s == "" then return 0 end
+	local n, i, count = #s, 1, 0
+	while i <= n do
+		local b = s:byte(i)
+		local b2 = s:byte(i + 1)
+		if b == 47 and b2 == 47 then                      -- // line comment
+			local e = s:find("\n", i + 2, true)
+			i = e and (e + 1) or (n + 1)
+		elseif b == 47 and b2 == 42 then                  -- /* block comment */
+			local depth = 1
+			i = i + 2
+			while i <= n and depth > 0 do
+				local c, c2 = s:byte(i), s:byte(i + 1)
+				if c == 47 and c2 == 42 then depth = depth + 1; i = i + 2
+				elseif c == 42 and c2 == 47 then depth = depth - 1; i = i + 2
+				else i = i + 1 end
+			end
+		elseif b == 34 then                               -- "string"
+			i = i + 1
+			while i <= n do
+				local c = s:byte(i)
+				if c == 92 then i = i + 2
+				elseif c == 34 then i = i + 1; break
+				else i = i + 1 end
+			end
+		elseif b == 39 then                               -- 'c' or a lifetime
+			if b2 == 92 then
+				local e = s:find("'", i + 3, true)
+				i = e and (e + 1) or (n + 1)
+			elseif b2 and b2 >= 0xC0 then
+				local len = b2 >= 0xF0 and 4 or (b2 >= 0xE0 and 3 or 2)
+				i = (s:byte(i + 1 + len) == 39) and (i + 2 + len) or (i + 1)
+			elseif b2 and s:byte(i + 2) == 39 then
+				i = i + 3
+			else
+				i = i + 1
+			end
+		elseif is_ident_start(b) then
+			local j = i
+			while j <= n and is_ident(s:byte(j)) do j = j + 1 end
+			local word = s:sub(i, j - 1)
+			local nb = s:byte(j)
+			if (word == "r" or word == "br" or word == "cr") and (nb == 34 or nb == 35) then
+				local after = skip_raw_string(s, j, n)
+				if after then
+					i = after
+				elseif word == "r" and nb == 35 then      -- raw identifier r#name
+					local k = j + 1
+					while k <= n and is_ident(s:byte(k)) do k = k + 1 end
+					i = k
+				else
+					i = j
+				end
+			else
+				if word == "unsafe" then count = count + 1 end
+				i = j
+			end
+		elseif b >= 48 and b <= 57 then                   -- number (may carry suffix)
+			local j = i
+			while j <= n and is_ident(s:byte(j)) do j = j + 1 end
+			i = j
+		else
+			i = i + 1
+		end
+	end
+	return count
+end
+
+local function is_rust(path)
+	return type(path) == "string" and path:match("%.rs$") ~= nil
+end
+
+local function read_file(path)
+	local f = io.open(path, "rb")
+	if not f then return "" end
+	local text = f:read("*a")
+	f:close()
+	return text
+end
+
+-- Returns a list of { path = ..., added = N } for Rust files whose unsafe
+-- count increases.
+local function claude_increases(input)
+	local path = input.file_path or input.path
+	if not is_rust(path) then return {} end
+	local delta = 0
+	if type(input.content) == "string" then
+		delta = count_unsafe(input.content) - count_unsafe(read_file(path))
+	elseif type(input.edits) == "table" then
+		for _, e in ipairs(input.edits) do
+			if type(e) == "table" then
+				delta = delta + count_unsafe(e.new_string) - count_unsafe(e.old_string)
+			end
+		end
+	elseif type(input.new_string) == "string" then
+		delta = count_unsafe(input.new_string) - count_unsafe(input.old_string)
+	end
+	if delta > 0 then return { { path = path, added = delta } } end
+	return {}
+end
+
+local function patch_increases(text)
+	local results, order = {}, {}
+	local current
+	local function section(path)
+		current = path and { path = path, plus = {}, minus = {} } or nil
+		if current then order[#order + 1] = current end
+	end
+	for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+		local add = line:match("^%*%*%* Add File: (.+)$")
+		local upd = line:match("^%*%*%* Update File: (.+)$")
+		local del = line:match("^%*%*%* Delete File: (.+)$")
+		local mov = line:match("^%*%*%* Move to: (.+)$")
+		if add or upd then
+			section(add or upd)
+		elseif del or line:match("^%*%*%* End Patch") then
+			section(nil)
+		elseif mov and current then
+			current.path = mov
+		elseif current then
+			local first = line:sub(1, 1)
+			if first == "+" then current.plus[#current.plus + 1] = line:sub(2)
+			elseif first == "-" then current.minus[#current.minus + 1] = line:sub(2) end
+		end
+	end
+	for _, s in ipairs(order) do
+		if is_rust(s.path) then
+			local delta = count_unsafe(table.concat(s.plus, "\n"))
+				- count_unsafe(table.concat(s.minus, "\n"))
+			if delta > 0 then results[#results + 1] = { path = s.path, added = delta } end
+		end
+	end
+	return results
+end
+
+local function advisory(increases)
+	local where = {}
+	for _, inc in ipairs(increases) do
+		where[#where + 1] = string.format("%s (+%d)", inc.path, inc.added)
+	end
+	return table.concat({
+		"STOP: this edit adds `unsafe` Rust code: " .. table.concat(where, ", ") .. ".",
+		"`unsafe` switches off the compiler guarantees this fleet depends on. Every new block is a"
+			.. " liability that must earn its place with evidence; convenience is not a reason.",
+		"Only two justifications are acceptable:",
+		"1. PERFORMANCE: you must follow the protocol, in order. (a) Write the fastest SAFE version"
+			.. " first, commenting where unsafe would help and what it would buy. (b) Benchmark it."
+			.. " (c) Write the unsafe version behind the same safe API. (d) Benchmark it with the same"
+			.. " harness, inputs and build profile. (e) Choose on the numbers, and keep the version you"
+			.. " did not choose commented out and intact beside the winner, with both measurements and"
+			.. " the compromise explained. No measurements, no unsafe. If the gain is within noise,"
+			.. " choose safe.",
+		"2. NO SAFE EQUIVALENT (FFI, intrinsics): keep each block minimal inside a safe wrapper,"
+			.. " put a `// SAFETY:` comment on every block naming the invariants it relies on, and"
+			.. " test the boundary (Miri where it applies).",
+		"If neither applies, remove the unsafe now. If you keep it, tell the owner in your report:"
+			.. " the file, how many blocks, which justification, and the benchmark numbers.",
+		"Full protocol (read it before continuing): " .. REFERENCE,
+	}, "\n")
+end
+
+local raw = io.read("*a") or ""
+local ok, payload = pcall(cjson.decode, raw)
+if not ok or type(payload) ~= "table" or type(payload.tool_input) ~= "table" then
+	os.exit(0)
+end
+
+local input = payload.tool_input
+local increases
+local tool = payload.tool_name
+local command = input.command
+if type(command) == "string" and (tool == "apply_patch" or tool == "ApplyPatch"
+	or command:match("^%s*%*%*%* Begin Patch")) then
+	increases = patch_increases(command)
+else
+	increases = claude_increases(input)
+end
+
+if #increases == 0 then os.exit(0) end
+
+io.write(cjson.encode({
+	hookSpecificOutput = {
+		hookEventName = payload.hook_event_name or "PreToolUse",
+		additionalContext = advisory(increases),
+	},
+}))
+os.exit(0)

@@ -67,6 +67,20 @@ C ABI boundaries. Catch or translate panics at the exported boundary where the
 ABI contract requires containment; C++ exceptions and Zig panics also need
 explicit boundary handling.
 
+## Unsafe code
+
+Treat `unsafe` as a last resort that must earn its place with evidence. Add it
+only for a measured performance win the owner accepts, or for an operation with
+no safe equivalent (FFI, intrinsics). For performance, never write the unsafe
+version first: write and benchmark a safe version, then an unsafe one with the
+same harness, choose on the numbers, and keep the loser commented out and
+intact with both measurements and the compromise explained. Crates that need
+no `unsafe` declare `#![forbid(unsafe_code)]`; crates that do confine it with a
+crate-level `deny` and module-level `allow`, with a `// SAFETY:` comment on
+every block. Read [unsafe Rust](references/unsafe-code.md) before adding or
+keeping any `unsafe`, and report each addition to the owner. Its
+`scripts/unsafe-advisory-hook` warns agents when an edit adds `unsafe`.
+
 When a public ABI has CLI consumers or interchangeable core implementations,
 use [multi-implementation-contracts](../multi-implementation-contracts/SKILL.md)
 to make acceptance consumers link only the packaged ABI. Same-crate CLI tests

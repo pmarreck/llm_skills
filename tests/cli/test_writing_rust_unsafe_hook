@@ -1,0 +1,186 @@
+#!/usr/bin/env luajit
+-- Contract tests for writing-rust/scripts/unsafe-advisory-hook.
+--
+-- The hook must advise exactly when an edit increases the number of real
+-- `unsafe` keywords in a Rust file, for both Claude Code payloads
+-- (Write/Edit/MultiEdit) and Codex apply_patch payloads, and stay silent for
+-- everything else: comments, strings, lint names, unchanged counts, other
+-- languages and unparseable input. It must never block (exit 2).
+
+local cjson = require("cjson")
+
+local script_dir = arg[0]:match("^(.*)/[^/]+$") or "."
+local root = script_dir .. "/../.."
+-- UNSAFE_ADVISORY_HOOK lets a mutation run point the suite at a broken copy.
+local hook = os.getenv("UNSAFE_ADVISORY_HOOK") or (root .. "/writing-rust/scripts/unsafe-advisory-hook")
+local reference = root .. "/writing-rust/references/unsafe-code.md"
+
+local function sq(s)
+	return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+local function capture(cmd)
+	local p = assert(io.popen(cmd))
+	local out = p:read("*a")
+	p:close()
+	return out
+end
+
+local work = capture("mktemp -d"):gsub("%s+$", "")
+assert(work ~= "", "mktemp -d failed")
+
+local function write_file(path, text)
+	local f = assert(io.open(path, "w"))
+	f:write(text)
+	f:close()
+end
+
+local function read_file(path)
+	local f = io.open(path, "r")
+	if not f then return "" end
+	local text = f:read("*a")
+	f:close()
+	return text
+end
+
+local function run(payload)
+	local input = type(payload) == "string" and payload or cjson.encode(payload)
+	write_file(work .. "/payload.json", input)
+	local raw = capture(string.format("%s < %s 2> %s; printf '\\n%%s' $?",
+		sq(hook), sq(work .. "/payload.json"), sq(work .. "/stderr")))
+	local stdout, code = raw:match("^(.*)\n(%d+)$")
+	return stdout or raw, tonumber(code), read_file(work .. "/stderr")
+end
+
+local failures = 0
+local function check(ok, label, detail)
+	if ok then
+		print("ok - " .. label)
+	else
+		failures = failures + 1
+		print("not ok - " .. label .. (detail and (" | " .. detail) or ""))
+	end
+end
+
+-- Expect an advisory that names `file_hint` and the reference document.
+local function advises(label, payload, file_hint)
+	local stdout, code, stderr = run(payload)
+	if code ~= 0 then
+		return check(false, label, "exit " .. tostring(code) .. " stderr=" .. stderr)
+	end
+	local ok, decoded = pcall(cjson.decode, stdout)
+	if not ok or type(decoded) ~= "table" then
+		return check(false, label, "stdout is not JSON: " .. stdout)
+	end
+	local hso = decoded.hookSpecificOutput or {}
+	local ctx = hso.additionalContext or ""
+	check(hso.hookEventName == "PreToolUse"
+		and ctx:find("unsafe", 1, true)
+		and ctx:find(file_hint, 1, true)
+		and ctx:find("references/unsafe-code.md", 1, true),
+		label, "context=" .. ctx)
+end
+
+local function silent(label, payload)
+	local stdout, code, stderr = run(payload)
+	check(code == 0 and stdout == "", label,
+		"exit " .. tostring(code) .. " stdout=" .. stdout .. " stderr=" .. stderr)
+end
+
+local function edit(path, old, new)
+	return { hook_event_name = "PreToolUse", tool_name = "Edit",
+		tool_input = { file_path = path, old_string = old, new_string = new } }
+end
+
+local function write(path, content)
+	return { hook_event_name = "PreToolUse", tool_name = "Write",
+		tool_input = { file_path = path, content = content } }
+end
+
+local function patch(body)
+	return { hook_event_name = "PreToolUse", tool_name = "apply_patch", cwd = work,
+		tool_input = { command = "*** Begin Patch\n" .. body .. "*** End Patch\n" } }
+end
+
+local rs = work .. "/src/lib.rs"
+capture("mkdir -p " .. sq(work .. "/src"))
+
+check(read_file(reference) ~= "", "reference document exists")
+
+-- Claude Edit
+advises("Edit adding an unsafe block warns", edit(rs,
+	"fn f(p: *const u8) -> u8 { 0 }",
+	"fn f(p: *const u8) -> u8 { unsafe { *p } }"), "lib.rs")
+silent("Edit with no unsafe change is silent", edit(rs, "let a = 1;", "let a = 2;"))
+silent("Edit removing unsafe is silent", edit(rs, "unsafe { *p }", "p.read()"))
+silent("Edit keeping the same unsafe count is silent",
+	edit(rs, "unsafe { *p }", "unsafe { p.read() }"))
+silent("unsafe in a line comment is silent",
+	edit(rs, "let a = 1;", "// unsafe { *p } was slower\nlet a = 1;"))
+silent("unsafe in a commented-out alternative block is silent", edit(rs, "x",
+	"/* Rejected unsafe version, 3% faster:\n   unsafe { ptr.add(i).read() }\n*/\nx"))
+silent("unsafe in nested block comments is silent",
+	edit(rs, "x", "/* outer /* inner */ unsafe { y } */ x"))
+silent("unsafe in a string literal is silent",
+	edit(rs, "x", [=[let msg = "unsafe { not code }"; x]=]))
+silent("unsafe in a raw string is silent",
+	edit(rs, "x", [=[let msg = r#"say "unsafe" here"#; x]=]))
+silent("unsafe_code lint attribute is silent",
+	edit(rs, "x", "#![forbid(unsafe_code)]\nx"))
+silent("raw identifier r#unsafe is silent", edit(rs, "x", "let r#unsafe = 1; x"))
+advises("char literal quote does not hide following unsafe",
+	edit(rs, "x", [=[let q = '"'; unsafe { y() } x]=]), "lib.rs")
+advises("lifetimes do not hide following unsafe",
+	edit(rs, "x", "fn g<'a>(v: &'a u8) -> u8 { unsafe { *v } } x"), "lib.rs")
+advises("unsafe fn declaration warns", edit(rs, "fn h() {}", "unsafe fn h() {}"), "lib.rs")
+advises("unsafe impl warns", edit(rs, "x", "unsafe impl Send for T {}\nx"), "lib.rs")
+silent("non-Rust file is silent", edit(work .. "/notes.md", "x", "unsafe { *p }"))
+
+-- Claude MultiEdit
+advises("MultiEdit adding unsafe warns", { hook_event_name = "PreToolUse",
+	tool_name = "MultiEdit", tool_input = { file_path = rs, edits = {
+		{ old_string = "a", new_string = "b" },
+		{ old_string = "c", new_string = "unsafe { d() }" } } } }, "lib.rs")
+
+-- Claude Write compares against the file on disk
+write_file(rs, "pub fn f(p: *const u8) -> u8 { unsafe { *p } }\n")
+silent("Write keeping the existing unsafe count is silent",
+	write(rs, "// rewritten\npub fn f(p: *const u8) -> u8 { unsafe { *p } }\n"))
+advises("Write increasing the unsafe count warns", write(rs,
+	"pub fn f(p: *const u8) -> u8 { unsafe { *p } }\npub fn g(p: *const u8) -> u8 { unsafe { *p } }\n"),
+	"lib.rs")
+advises("Write of a new Rust file with unsafe warns",
+	write(work .. "/src/new_file.rs", "unsafe fn z() {}\n"), "new_file.rs")
+silent("Write of a new Rust file without unsafe is silent",
+	write(work .. "/src/clean.rs", "pub fn z() {}\n"))
+
+-- Codex apply_patch
+advises("apply_patch adding a Rust file with unsafe warns",
+	patch("*** Add File: src/ffi.rs\n+pub fn f(p: *const u8) -> u8 {\n+    unsafe { *p }\n+}\n"),
+	"src/ffi.rs")
+advises("apply_patch updating a Rust file with new unsafe warns",
+	patch("*** Update File: src/lib.rs\n@@\n-    p.read()\n+    unsafe { *p }\n"), "src/lib.rs")
+silent("apply_patch moving unsafe between lines is silent",
+	patch("*** Update File: src/lib.rs\n@@\n-    unsafe { *p }\n+    unsafe { p.read() }\n"))
+silent("apply_patch adding unsafe only in a comment is silent",
+	patch("*** Update File: src/lib.rs\n@@\n+    // unsafe would avoid the bounds check here\n"))
+silent("apply_patch on a non-Rust file is silent",
+	patch("*** Add File: README.md\n+unsafe { *p }\n"))
+advises("apply_patch reports only the Rust file that gained unsafe",
+	patch("*** Update File: src/a.rs\n@@\n+fn ok() {}\n*** Add File: src/b.rs\n+unsafe fn bad() {}\n"),
+	"src/b.rs")
+
+-- Robustness
+silent("unparseable payload is silent", "not json")
+silent("payload without a file is silent",
+	{ hook_event_name = "PreToolUse", tool_name = "Bash", tool_input = { command = "ls" } })
+
+capture("rm -rf " .. sq(work))
+
+if failures == 0 then
+	print("PASS: writing-rust unsafe advisory hook")
+	os.exit(0)
+else
+	print(string.format("FAIL: writing-rust unsafe advisory hook (%d failing)", failures))
+	os.exit(1)
+end

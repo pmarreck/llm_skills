@@ -34,7 +34,9 @@
 				gitMinimal
 				gnugrep
 				gnused
-				luajit
+				# lua-cjson: hook scripts parse the JSON payloads Claude Code
+				# and Codex send on stdin (writing-rust/scripts).
+				(luajit.withPackages (ps: [ ps.cjson ]))
 				ripgrep
 				] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.bubblewrap ];
 		in {
@@ -59,7 +61,7 @@
 							# shebang is rewritten to a store path.
 							patchShebangs ./test ./install ./tests \
 								./memories/scripts ./onboard/scripts \
-								./writing-nix/scripts ./planning-work/scripts ./test-isolation/scripts
+								./writing-nix/scripts ./writing-rust/scripts ./planning-work/scripts ./test-isolation/scripts
 
 							# The suite writes sandboxes under TMPDIR and needs a
 							# writable HOME; the sandbox provides neither by default.
