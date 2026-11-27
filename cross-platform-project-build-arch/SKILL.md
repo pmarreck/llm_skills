@@ -137,6 +137,10 @@ Keep generated products and publication symlinks out of Git, using narrow
 ignore rules that preserve tracked portable scripts and intentional launchers.
 Use relative links for local products. Nix links need retained output GC roots;
 foreign store paths copied from another machine are not guaranteed to exist.
+An indirect GC root tracks the out-link's original path: renaming the link
+orphans the root. Keep the temporary link until the final path is registered,
+for example with `nix-store --add-root FINAL --realise STORE_PATH`; verify the
+final root with `nix-store --gc --print-roots`.
 Building a cross target must not retarget another platform's entrypoint.
 Publish only after success, preserve the previous working selection on failure,
 and serialize competing publications. Do not delete unrecognized `bin/` files.
