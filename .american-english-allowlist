@@ -1,0 +1,2 @@
+# Exact repository path, exact lowercase word (or * for the whole file), specific reason; tab-delimited.
+writing-elm/references/toolchain-and-nix.md	analyse	elm-analyse is the exact name of a removed nixpkgs package

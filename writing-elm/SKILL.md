@@ -44,10 +44,18 @@ before changing anything. `elm --version` must equal `elm.json`'s
    check, and `checks.nix` as a check. [checks.nix](examples/checks.nix) runs
    steps 3 and 4 in the sandbox; `./test` runs the flake checks.
 
+**Elm code you write or change must pass elm-review before you report the
+work done**, along with the formatter and tests. Fix findings rather than
+disabling rules; on the example, elm-review caught unused constructor
+arguments, missing `let` annotations and unexposed types. If the project has
+no `review/` configuration, add one as
+[toolchain and Nix](references/toolchain-and-nix.md#elm-review) describes and
+wire it into the checks. Running `elm-review --template ...` without a local
+configuration does not work: the template targets Elm 0.19.1 and fails with
+ELM VERSION MISMATCH.
+
 A successful compile proves types, not behavior. Test decoders against real
-payloads, including missing, `null` and wrong-typed fields. Fix elm-review
-findings rather than disabling rules; on the example it caught unused
-constructor arguments, missing `let` annotations and unexposed types.
+payloads, including missing, `null` and wrong-typed fields.
 
 ## Model the domain before writing views
 

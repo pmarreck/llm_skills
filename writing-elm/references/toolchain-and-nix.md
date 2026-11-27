@@ -102,9 +102,13 @@ different feature.
 
 ## elm-review
 
-The configuration is its own Elm project in `review/`, with
-`review/src/ReviewConfig.elm` exposing `config : List Rule`. Set it up once,
-outside the sandbox and with network access:
+Run elm-review on all Elm code you write or change. The configuration is its
+own Elm project in `review/`, with `review/src/ReviewConfig.elm` exposing
+`config : List Rule`. A project without one needs one added; running
+`elm-review --template jfmengels/elm-review-config/application` against a
+project with no local configuration fails with ELM VERSION MISMATCH, because
+the downloaded template targets 0.19.1. Set it up once, outside the sandbox
+and with network access:
 
 1. `elm-review init --template jfmengels/elm-review-config/application`
    (`/package` for packages). The template enables the elm-review author's
