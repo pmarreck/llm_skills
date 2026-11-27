@@ -80,3 +80,7 @@ Mechatron Prime CI is the project's continuous-integration service.
 - [x] [Active — single physical cross-agent skill tree (2026-08-03)] Add macOS/Linux integration coverage for opt-in hook-driven Codex sync (2026-07-19 09:31 EDT). It preserves local-only skills and declares its hook location.
 - [x] [Active — single physical cross-agent skill tree (2026-08-03)] Implement portable staged `--codex --sync` and tracked post-checkout/post-merge hooks (2026-07-19 09:33 EDT).
 - [x] [Active — single physical cross-agent skill tree (2026-08-03)] Enable the repository-local hook, validate the real installation, document it, and commit the verified change (2026-07-19 09:34 EDT).
+
+## Retired 2026-11-27
+
+- [x] [Recently completed] Reconcile the October 14 inbox request, archive 42 completed plan entries, preserve deferred scope, and pass plan lint plus the full suite (done 2026-10-21 15:05 EDT).

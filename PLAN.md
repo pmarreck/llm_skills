@@ -5,6 +5,8 @@ Scope boundaries live in [docs/plan_context/follow-ups.md](docs/plan_context/fol
 
 ## Deferred pending separate scope
 
+- [x] Create cross-agent `writing-zig`, fold greenfield workflow into `scaffold-zig-project`, and publish a source-reviewed 0.16→0.17 interim checklist; reconcile the Obsidian Zig index and global skill pointer (done 2026-11-02 13:56 EST; committed in 7c318e4 on 2026-11-27).
+
 - [ ] Review and document deployed dotfiles staged-dependency hook semantics after its behavioral tests and agentconf regression pass; static lint does not replace clean Nix build evidence.
 
 - [ ] Coordinate the dotfiles build-layout migration and select a CLI plus bundled GUI pilot when implementation scope is established (context: docs/plan_context/follow-ups.md).
@@ -22,4 +24,3 @@ Scope boundaries live in [docs/plan_context/follow-ups.md](docs/plan_context/fol
 - [x] Standardize CLI --about on canonical PF with optional separate VARIANT, actual build-target provenance and migration acceptance cases (done 2026-10-23 15:34 EDT).
 - [x] Extend the cross-platform build skill with canonical implementation selection, one build command with independent scope flags, optional VARIANT paths and migration acceptance cases (done 2026-10-23 13:55 EDT).
 - [x] Create the shared writing-bend skill with pinned official sources, compiler/kernel/backend checks, mutation controls and an independent forward trial (done 2026-10-21 16:54 EDT; delivered by this commit in writing-bend/SKILL.md).
-- [x] Reconcile the October 14 inbox request, archive 42 completed plan entries, preserve deferred scope, and pass plan lint plus the full suite (done 2026-10-21 15:05 EDT).
