@@ -5,3 +5,9 @@
 # satisfied only by a globally installed tool fails here instead of surviving
 # as a false green.
 checks.x86_64-linux.test
+
+# The writing-elm example: its offline production build, and its formatter,
+# tests and elm-review run offline in the sandbox, so a nixpkgs update that
+# breaks the skill's recipe fails CI.
+checks.x86_64-linux.writing-elm-example
+checks.x86_64-linux.writing-elm-example-checks

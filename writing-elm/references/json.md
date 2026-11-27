@@ -15,7 +15,7 @@ accept the wrong data silently.
 | `DecodeField.optional "x" d` | `Nothing` | fails unless `d` accepts null | fails |
 | `DecodeField.optionalNullable "x" d` | `Nothing` | `Nothing` | fails |
 
-The two silent rows were verified with Elm 0.19.2 and 0.19.3 in
+The two silent rows were verified with Elm 0.19.2 in
 [Tests.elm](../examples/tests/Tests.elm). The danger compounds with lists: a
 fallback around `field "subtasks" (list item)` erases every subtask when one
 of them is malformed. Use the helpers in

@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Main exposing (Model, Msg, main)
 
 import Browser
 import Card exposing (Card, StatusKind)
@@ -85,7 +85,7 @@ type Msg
     = GotCards (Result Http.Error (List Card))
     | FilterTyped String
     | TimerToggled
-    | Tick Time.Posix
+    | Tick
 
 
 main : Program Decode.Value Model Msg
@@ -141,7 +141,7 @@ updateSession msg session =
         TimerToggled ->
             ( { session | timer = toggle session.timer }, Cmd.none )
 
-        Tick _ ->
+        Tick ->
             ( { session | timer = advance session.timer }, Cmd.none )
 
 
@@ -179,7 +179,8 @@ subscriptions model =
         Running { timer } ->
             case timer of
                 Ticking _ ->
-                    Time.every 1000 Tick
+                    -- The message carries no time because nothing uses it.
+                    Time.every 1000 (\_ -> Tick)
 
                 Paused _ ->
                     Sub.none
@@ -238,6 +239,7 @@ viewCards query remote =
 
         Loaded cards ->
             let
+                visible : List Card
                 visible =
                     List.filter (String.contains query << String.toLower << Card.title) cards
             in
@@ -247,6 +249,7 @@ viewCards query remote =
 viewColumn : List Card -> StatusKind -> Html Msg
 viewColumn cards columnKind =
     let
+        inColumn : List Card
         inColumn =
             List.filter (\card -> Card.kind (Card.status card) == columnKind) cards
     in
@@ -254,8 +257,28 @@ viewColumn cards columnKind =
         [ Html.h2 [] [ Html.text (Card.kindLabel columnKind ++ " (" ++ String.fromInt (List.length inColumn) ++ ")") ]
 
         -- Keyed by card id so reordering keeps each row's DOM state.
-        , Html.Keyed.ul [] (List.map (\card -> ( Card.idToString (Card.id card), Html.li [] [ Html.text (Card.title card) ] )) inColumn)
+        , Html.Keyed.ul [] (List.map viewCard inColumn)
         ]
+
+
+viewCard : Card -> ( String, Html Msg )
+viewCard card =
+    ( Card.idToString (Card.id card)
+    , Html.li [] (Html.text (Card.title card) :: viewBlockedReason (Card.status card))
+    )
+
+
+viewBlockedReason : Card.Status -> List (Html Msg)
+viewBlockedReason cardStatus =
+    case cardStatus of
+        Card.Blocked reason ->
+            [ Html.small [] [ Html.text (" blocked: " ++ reason) ] ]
+
+        Card.Todo ->
+            []
+
+        Card.Doing ->
+            []
 
 
 httpErrorToString : Http.Error -> String

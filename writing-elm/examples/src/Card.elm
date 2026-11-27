@@ -76,6 +76,7 @@ chain, so this list cannot silently miss a kind.
 allKinds : List StatusKind
 allKinds =
     let
+        collect : StatusKind -> List StatusKind -> List StatusKind
         collect k acc =
             case nextKind k of
                 Just following ->

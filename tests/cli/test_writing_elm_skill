@@ -1,8 +1,10 @@
 #!/usr/bin/env luajit
 -- Contract tests for the writing-elm skill: required files exist, the
--- frontmatter is valid, every relative Markdown link resolves, and the
--- example's Nix package sources match its elm.json exactly (the staleness
--- check the skill tells projects to keep).
+-- frontmatter is valid, every relative Markdown link resolves, each example
+-- project's Nix package sources match its elm.json exactly, and the flake
+-- builds and checks the example. The flake checks themselves compile, test
+-- and elm-review the example offline; this file keeps the cheap structural
+-- contract that runs without them.
 
 local cjson = require("cjson")
 
@@ -36,9 +38,13 @@ local required = {
 	"references/mistakes.md",
 	"examples/elm.json",
 	"examples/elm-srcs.nix",
-	"examples/registry.dat",
 	"examples/default.nix",
-	"examples/nix/elm-release-binary.nix",
+	"examples/checks.nix",
+	"examples/nix/elm-home.nix",
+	"examples/nix/test-runner-srcs.nix",
+	"examples/review/elm.json",
+	"examples/review/elm-srcs.nix",
+	"examples/review/src/ReviewConfig.elm",
 	"examples/src/Main.elm",
 	"examples/src/Card.elm",
 	"examples/src/DecodeField.elm",
@@ -74,27 +80,45 @@ for _, rel in ipairs(docs) do
 	end
 end
 
--- elm-srcs.nix lists exactly the packages and versions in elm.json.
-local elm_json = cjson.decode(read(skill .. "/examples/elm.json") or "{}")
-local expected = {}
-for _, section in ipairs({ "dependencies", "test-dependencies" }) do
-	for _, kind in ipairs({ "direct", "indirect" }) do
-		for pkg, version in pairs((elm_json[section] or {})[kind] or {}) do
-			expected[pkg] = version
+-- Each project's elm-srcs.nix lists exactly the packages and versions in its
+-- elm.json, and both projects target the same compiler.
+local function check_project(dir)
+	local elm_json = cjson.decode(read(skill .. "/" .. dir .. "/elm.json") or "{}")
+	local expected = {}
+	for _, section in ipairs({ "dependencies", "test-dependencies" }) do
+		for _, kind in ipairs({ "direct", "indirect" }) do
+			for pkg, version in pairs((elm_json[section] or {})[kind] or {}) do
+				expected[pkg] = version
+			end
 		end
 	end
+	local pinned = {}
+	local srcs = read(skill .. "/" .. dir .. "/elm-srcs.nix") or ""
+	for pkg, body in srcs:gmatch('"([%w%-]+/[%w%-]+)"%s*=%s*(%b{})') do
+		pinned[pkg] = body:match('version%s*=%s*"([^"]+)"')
+	end
+	check(next(expected) ~= nil, dir .. "/elm.json lists dependencies")
+	for pkg, version in pairs(expected) do
+		check(pinned[pkg] == version, dir .. "/elm-srcs.nix pins " .. pkg .. " " .. version,
+			"found " .. tostring(pinned[pkg]))
+	end
+	for pkg in pairs(pinned) do
+		check(expected[pkg] ~= nil, dir .. "/elm-srcs.nix has no package missing from elm.json: " .. pkg)
+	end
+	return elm_json
 end
-local pinned = {}
-local srcs = read(skill .. "/examples/elm-srcs.nix") or ""
-for pkg, body in srcs:gmatch('"([%w%-]+/[%w%-]+)"%s*=%s*(%b{})') do
-	pinned[pkg] = body:match('version%s*=%s*"([^"]+)"')
-end
-for pkg, version in pairs(expected) do
-	check(pinned[pkg] == version, "elm-srcs.nix pins " .. pkg .. " " .. version,
-		"found " .. tostring(pinned[pkg]))
-end
-for pkg in pairs(pinned) do
-	check(expected[pkg] ~= nil, "elm-srcs.nix has no package missing from elm.json: " .. pkg)
+local elm_json = check_project("examples")
+local review_json = check_project("examples/review")
+check(review_json["elm-version"] == elm_json["elm-version"],
+	"review/elm.json targets the same Elm as the application",
+	tostring(review_json["elm-version"]) .. " vs " .. tostring(elm_json["elm-version"]))
+
+-- CI builds and checks the example, so the skill's offline recipe cannot rot
+-- unnoticed when nixpkgs moves.
+local flake = read(script_dir .. "/../../flake.nix") or ""
+for _, file in ipairs({ "default.nix", "checks.nix" }) do
+	check(flake:find("./writing-elm/examples/" .. file, 1, true) ~= nil,
+		"flake.nix checks build writing-elm/examples/" .. file)
 end
 
 -- The example builds with nixpkgs' compiler by default, and elm.json names

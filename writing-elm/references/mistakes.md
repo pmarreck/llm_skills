@@ -5,17 +5,13 @@ Each entry names the mistake, why it fails, and the fix. Entries marked
 the rest come from official upgrade notes, package documentation and
 community guidance.
 
-## Elm 0.18 leftovers and other-language habits
+## Compile errors and habits from other languages
 
-See the table in the main skill for the common syntax replacements. More:
-
-- **`Http.Error` shape.** 0.19 has `BadUrl String | Timeout | NetworkError |
+- **`Http.Error` shape.** It is `BadUrl String | Timeout | NetworkError |
   BadStatus Int | BadBody String`; there is no response record. Handle every
   case explicitly ([Main.elm](../examples/src/Main.elm) shows one).
-- **Old decode pipeline package.** `NoRedInk/elm-decode-pipeline` became
-  `NoRedInk/elm-json-decode-pipeline`; its `decode` became
-  `Json.Decode.succeed`.
-- **`String.toInt` returning `Result`.** It returns `Maybe Int` in 0.19.
+- **No user-defined operators.** Only core packages may define infix
+  operators; write a named function.
 - **Shadowing [verified].** Rebinding any name already in scope, including a
   top-level function name used as a parameter (`kind status` when `status` is
   also a function), is a SHADOWING error. Choose distinct names
@@ -116,14 +112,20 @@ errors with `Decode.errorToString`.
 
 ## Tooling and process
 
-- Skipping `elm-format --validate` and `elm-review` in `./test`.
+- Skipping `elm-format --validate`, `elm-test-rs` or `elm-review` in the Nix
+  checks, or running them only outside the sandbox.
 - Leaving `Debug` calls until release, then discovering `--optimize` refuses
   them. Run `NoDebug` rules continuously.
 - Trusting "Success!" text from `elm make --optimize` instead of its exit
-  status **[verified with 0.19.3]**.
-- Missing top-level type annotations, which push errors far from their cause.
+  status **[verified]**.
+- Missing type annotations on top-level and `let` definitions, which push
+  errors far from their cause; elm-review's `NoMissingTypeAnnotation` and
+  `NoMissingTypeAnnotationInLetIn` catch them **[verified]**.
 - Mismatched compiler, `elm.json` `elm-version` and test runner versions.
+- Keeping the `"elm-version": "0.19.1"` that `elm-review init` writes into
+  `review/elm.json`; it fails with ELM VERSION MISMATCH **[verified]**.
 - Committing `elm-stuff/`.
 - Piping `yes` into `elm install` and committing whatever it changed.
-- Stale `elm-srcs.nix` or `registry.dat` after `elm.json` changes, or an
-  elm2nix `registry.dat` with Elm 0.19.3 **[verified]**.
+- Forgetting to regenerate `elm-srcs.nix` after an `elm.json` changes. The
+  example's `nix/elm-home.nix` makes evaluation fail until it is
+  regenerated **[verified]**.

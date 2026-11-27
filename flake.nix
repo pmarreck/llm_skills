@@ -107,6 +107,12 @@
 							./test
 							touch "$out"
 						'';
+
+					# The writing-elm example, built and verified offline the way the
+					# skill tells projects to: a nixpkgs update that breaks the
+					# example's build, tests or elm-review turns CI red.
+					writing-elm-example = import ./writing-elm/examples/default.nix { inherit pkgs; };
+					writing-elm-example-checks = import ./writing-elm/examples/checks.nix { inherit pkgs; };
 				});
 
 			devShells = forAllSystems (system:
