@@ -15,6 +15,44 @@ one implementation; distinct implementations in the same language may use
 distinct identifiers. Declare identifiers in the existing build configuration,
 not by guessing which source directories happen to exist.
 
+### Separate core identity from frontend language
+
+When interchangeable library cores have consumers written in other languages,
+implementation identifiers name the **core/backend**, not the CLI's source
+language. Declare a mapping from each identifier to its library artifacts and
+default frontend. For example:
+
+| CANONICAL_IMPL | Selected core | Declared CLI consumer |
+| --- | --- | --- |
+| `zig` | Zig library through its public C ABI | Rust CLI |
+| `rust` | Rust library through its public C ABI | Zig CLI |
+
+`./build canonize zig` selects the complete declared Zig-core route; the public
+CLI can therefore be written in Rust. Its frontend does not make it the Rust
+implementation. The same rule applies if an existing C CLI is the chosen
+consumer. A Rust frontend over one Zig core is one mixed-language product, not
+two independent implementations. Two interchangeable cores are two
+implementations even when they share one frontend.
+
+For this layout, `./build` builds the selected core and its declared consumer;
+`./build --all-impls` builds all declared core routes and their required
+consumers. Frontend/backend test combinations are a separately declared matrix,
+not extra canonical selections. `./test` checks every required combination,
+not just the current canonical route. Do not introduce a second selector merely
+because the frontend uses a different language.
+
+Expose the mapping in build configuration, help and output metadata. An
+assembled `zig-out/<PF>/.../bin/tool` can contain a Rust CLI over the Zig core;
+that tree identifies the selected implementation route, not the language of
+every file inside it. Keep separately built component artifacts distinguishable
+and publish the complete product with its runtime libraries/resources.
+
+Preserve the existing qualified core and frontend as the default during a port.
+Do not silently switch to a newer, faster or more convenient route. Record any
+intentional frontend change and qualify it before publication. For ABI boundary
+enforcement and shared acceptance suites, use
+[multi-implementation-contracts](../../multi-implementation-contracts/SKILL.md).
+
 `./build canonize rust` validates the identifier, atomically writes the file,
 then prints to stdout and exits successfully:
 

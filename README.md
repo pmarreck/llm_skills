@@ -96,6 +96,7 @@ for the full mechanism.
 | [`writing-bend`](writing-bend/SKILL.md) | Bend 2 affine types, executable-linked proofs, exact arithmetic, generated-JS/native embedding and tested examples |
 | [`writing-elm`](writing-elm/SKILL.md) | Elm toolchain and offline Nix builds, domain modeling, decoder traps, interop and tested examples |
 | [`cross-platform-project-build-arch`](cross-platform-project-build-arch/SKILL.md) | Required Nix builds, target-separated outputs, host-specific PATH entrypoints, and complete application bundles |
+| [`multi-implementation-contracts`](multi-implementation-contracts/SKILL.md) | Interchangeable cores, separately built ABI consumers, shared acceptance suites and canonical core/frontend mappings |
 | [`universal-app-frontend`](universal-app-frontend/SKILL.md) | Compatible GPUI package selection, shared native desktop UI architecture, platform pitfalls, and qualification |
 | [`test-isolation`](test-isolation/SKILL.md) | Disposable test state, safe publication tests and a Linux read-only-filesystem execution gate |
 | [`ship-it`](ship-it/SKILL.md) | Shipping work — commit/push, CI watch, tagged releases (named to avoid Claude Code's built-in `/ship`) |
