@@ -89,6 +89,9 @@ for the full mechanism.
 | [`memories`](memories/SKILL.md) | Curate, validate, consolidate, and promote durable shared/project memory lessons |
 | [`performance-profiling`](performance-profiling/SKILL.md) | Runtime/complexity/memory gates, hardware-qualified external history, retry diagnostics and explicit baseline epochs |
 | [`writing-nix`](writing-nix/SKILL.md) | Authoring, packaging, debugging, or contributing Nix code with current ecosystem context |
+| [`writing-rust`](writing-rust/SKILL.md) | Current Rust tooling, type-driven completeness, ownership and FFI boundaries |
+| [`writing-zig`](writing-zig/SKILL.md) | Version-aware Zig language, stdlib, build, testing, FFI and Nix dependency work |
+| [`upgrading-zig-16-to-17`](upgrading-zig-16-to-17/SKILL.md) | Assess and qualify authorized Zig 0.16 to 0.17 migrations |
 | [`writing-roc`](writing-roc/SKILL.md) | Current Roc syntax, compiler/platform version guards, pure-core design and tested examples |
 | [`writing-bend`](writing-bend/SKILL.md) | Bend 2 affine types, executable-linked proofs, exact arithmetic, generated-JS/native embedding and tested examples |
 | [`writing-elm`](writing-elm/SKILL.md) | Elm toolchain and offline Nix builds, domain modeling, decoder traps, interop and tested examples |
@@ -102,7 +105,7 @@ for the full mechanism.
 
 | Skill | Trigger |
 |---|---|
-| [`scaffold-zig-project`](scaffold-zig-project/SKILL.md) | Starting a new Zig project from scratch |
+| [`scaffold-zig-project`](scaffold-zig-project/SKILL.md) | Starting a Nix-first Zig project using the shared writing-zig contract |
 | [`fix-zig-deps-hash`](fix-zig-deps-hash/SKILL.md) | `nix build` fails with zigDeps/zigDepsHash mismatch after `build.zig.zon` changed |
 | [`llvm-guided-optimization`](llvm-guided-optimization/SKILL.md) | Optimizing Zig hot paths via LLVM IR after algorithmic gains are exhausted |
 | [`zig-microbenchmarks`](zig-microbenchmarks/SKILL.md) | Compatibility route to performance-profiling and its Zig adapter guidance |
