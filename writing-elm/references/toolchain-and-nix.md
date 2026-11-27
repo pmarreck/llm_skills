@@ -122,7 +122,12 @@ and with network access:
    `checks.nix` as the example does. Where the review project and the
    application share a package, they must use the same version.
 
-Run `elm-review --fix` locally to apply the automatic fixes it offers. It has
+Run `elm-review --fix` locally to apply the automatic fixes it offers, one at a
+time with a prompt for each. `--fix-all-without-prompt` applies every fix and
+repeats until none remain; the `NoUnused` rules then delete whatever has no
+caller yet, including code written for the next change and the constructors
+of a type whose values are not created yet. Restrict it with `--rules` to the
+rules you intend, and run it on committed code. It has
 no inline disable comments; exempt generated or vendored code in the
 configuration with `Rule.ignoreErrorsForDirectories` or
 `Rule.ignoreErrorsForFiles`.

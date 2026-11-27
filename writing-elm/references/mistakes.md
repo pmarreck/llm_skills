@@ -112,6 +112,10 @@ errors with `Decode.errorToString`.
 
 ## Tooling and process
 
+- **`elm-review --fix-all` deleted code written ahead of its callers.** Run
+  over a module the next commit would use, its `NoUnused` fixes removed the
+  module's functions and all but one constructor of a type. Name the rules to
+  fix with `--rules`, and fix only committed code.
 - Skipping `elm-format --validate`, `elm-test-rs` or `elm-review` in the Nix
   checks, or running them only outside the sandbox.
 - Leaving `Debug` calls until release, then discovering `--optimize` refuses

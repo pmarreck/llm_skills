@@ -58,6 +58,15 @@ wire it into the checks. Running `elm-review --template ...` without a local
 configuration does not work: the template targets Elm 0.19.1 and fails with
 ELM VERSION MISMATCH.
 
+**`elm-review --fix-all` deletes code it thinks is unused.** Its `NoUnused`
+fixes remove exports, functions, type aliases and constructors that nothing
+uses yet, and re-run until none remain, so code written ahead of its callers
+(a module the next commit will use, a constructor a later port will create)
+disappears, sometimes down to one constructor of a type. Apply fixes with
+`--rules NoPrematureLetComputation,Simplify,...` naming only the rules you
+mean, review the diff before keeping it, and commit first so the fixer cannot
+destroy uncommitted work.
+
 A successful compile proves types, not behavior. Test decoders against real
 payloads, including missing, `null` and wrong-typed fields.
 
