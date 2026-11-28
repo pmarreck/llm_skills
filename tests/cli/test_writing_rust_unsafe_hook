@@ -43,11 +43,11 @@ local function read_file(path)
 	return text
 end
 
-local function run(payload)
+local function run(payload, prefix)
 	local input = type(payload) == "string" and payload or cjson.encode(payload)
 	write_file(work .. "/payload.json", input)
-	local raw = capture(string.format("%s < %s 2> %s; printf '\\n%%s' $?",
-		sq(hook), sq(work .. "/payload.json"), sq(work .. "/stderr")))
+	local raw = capture(string.format("%s%s < %s 2> %s; printf '\\n%%s' $?",
+		prefix or "", sq(hook), sq(work .. "/payload.json"), sq(work .. "/stderr")))
 	local stdout, code = raw:match("^(.*)\n(%d+)$")
 	return stdout or raw, tonumber(code), read_file(work .. "/stderr")
 end
@@ -181,6 +181,22 @@ advises("apply_patch reports only the Rust file that gained unsafe",
 silent("unparseable payload is silent", "not json")
 silent("payload without a file is silent",
 	{ hook_event_name = "PreToolUse", tool_name = "Bash", tool_input = { command = "ls" } })
+
+-- Hooks inherit the session PATH, and a project's Nix shell can put a LuaJIT without lua-cjson
+-- first. The hook then reruns once under a LuaJIT that has it, or fails visibly when none does.
+local real_luajit = capture("command -v luajit"):gsub("%s+$", "")
+write_file(work .. "/luajit", "#!/bin/sh\nexec " .. sq(real_luajit) .. " -e \"package.path=[[]] package.cpath=[[]]\" \"$@\"\n")
+os.execute("chmod +x " .. sq(work .. "/luajit"))
+local unsafe_write = write("src/ffi.rs", "unsafe fn poke() {}\n")
+local direct = run(unsafe_write)
+local fallback, fallback_code = run(unsafe_write, "LUAJIT_CJSON_CANDIDATES=/nonexistent/luajit:" .. sq(real_luajit) .. " " .. sq(work .. "/luajit") .. " ")
+-- cjson key order differs between processes, so compare the decoded advisory.
+local function advisory(out) local ok, d = pcall(cjson.decode, out); return ok and type(d) == "table" and d.hookSpecificOutput or {} end
+local want, got = advisory(direct), advisory(fallback)
+check(fallback_code == 0 and want.additionalContext ~= nil and got.additionalContext == want.additionalContext
+	and got.hookEventName == want.hookEventName, "a LuaJIT without cjson reruns under one that has it", fallback)
+local _, none_code, none_err = run(unsafe_write, "LUAJIT_CJSON_CANDIDATES=" .. sq(work .. "/luajit") .. " " .. sq(work .. "/luajit") .. " ")
+check(none_code == 1 and none_err:find("lua-cjson is unavailable", 1, true) ~= nil, "no LuaJIT with cjson fails visibly", none_err)
 
 capture("rm -rf " .. sq(work))
 
